@@ -49,7 +49,7 @@ pub fn create_blank_rpc_server() -> Router<AppData> {
 pub async fn start_rpc_server(
     opts: CreateRpcServerOptions,
     mut make_service: axum::routing::IntoMakeService<Router>,
-) {
+) -> ! {
     match opts.bind {
         CreateRpcServerBind::Address(addr) => {
             let listener = tokio::net::TcpListener::bind(addr)
