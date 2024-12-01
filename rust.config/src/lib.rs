@@ -108,6 +108,8 @@ pub struct BasePorts {
     pub jobserver_bind_addr: String,
     pub bot_base_addr: String,
     pub bot_bind_addr: String,
+    pub template_worker_addr: String,
+    pub template_worker_port: u16,
 }
 
 #[derive(Serialize, Deserialize)]

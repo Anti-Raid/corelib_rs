@@ -13,12 +13,38 @@ pub fn get_icon_of_state(state: &str) -> String {
     .to_string()
 }
 
+pub struct EmbedResponse<'a> {
+    pub embeds: Vec<CreateEmbed<'a>>,
+    pub components: Vec<CreateActionRow<'a>>,
+}
+
+impl<'a> EmbedResponse<'a> {
+    pub fn new() -> Self {
+        Self {
+            embeds: Vec::new(),
+            components: Vec::new(),
+        }
+    }
+
+    pub fn embed(self, embed: CreateEmbed<'a>) -> Self {
+        let mut new = self;
+        new.embeds.push(embed);
+        new
+    }
+
+    pub fn components(self, component: Vec<CreateActionRow<'a>>) -> Self {
+        let mut new = self;
+        new.components = component;
+        new
+    }
+}
+
 pub fn embed<'a>(
     base_api_url: &str,
     job: &Job,
     pre_embeds: Vec<serenity::all::CreateEmbed<'a>>,
     show_status: bool,
-) -> Result<poise::CreateReply<'a>, Error> {
+) -> Result<EmbedResponse<'a>, Error> {
     let mut job_statuses: Vec<String> = Vec::new();
     let mut job_statuses_length = 0;
     let mut components = Vec::new();
@@ -87,7 +113,7 @@ pub fn embed<'a>(
         .description(description)
         .color(serenity::all::Colour::DARK_GREEN);
 
-    let mut msg = poise::CreateReply::default();
+    let mut msg = EmbedResponse::new();
 
     for pre_embed in pre_embeds {
         msg = msg.embed(pre_embed);

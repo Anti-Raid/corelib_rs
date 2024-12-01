@@ -12,9 +12,6 @@ pub struct Data {
 
     /// Any extra data represented as a key-value map
     pub extra_data: dashmap::DashMap<i32, Arc<dyn std::any::Any + Send + Sync>>,
-
-    /// The silverpelt cache to use for this module
-    pub silverpelt_cache: Arc<crate::cache::SilverpeltCache>,
 }
 
 impl Debug for Data {
@@ -25,44 +22,7 @@ impl Debug for Data {
             .field("object_store", &"Arc<ObjectStore>")
             .field("props", &"Arc<dyn Props + Send + Sync>")
             .field("extra_data", &self.extra_data.len())
-            .field("silverpelt_cache", &"Arc<crate::cache::SilverpeltCache>")
             .finish()
-    }
-}
-
-impl Data {
-    /// Given the Data and a cache_http, returns the settings data
-    pub fn settings_data(
-        &self,
-        serenity_context: serenity::all::Context,
-    ) -> ar_settings::types::SettingsData {
-        ar_settings::types::SettingsData {
-            pool: self.pool.clone(),
-            reqwest: self.reqwest.clone(),
-            object_store: self.object_store.clone(),
-            cache_http: botox::cache::CacheHttpImpl::from_ctx(&serenity_context),
-            serenity_context,
-        }
-    }
-
-    /// Given a settings data, return the silverpelt cache
-    ///
-    /// This is just a wrapper for <serenity_context>.data::<Data>().silverpelt_cache.clone()
-    pub fn silverpelt_cache(
-        settings_data: &ar_settings::types::SettingsData,
-    ) -> Arc<crate::cache::SilverpeltCache> {
-        settings_data
-            .serenity_context
-            .data::<Data>()
-            .silverpelt_cache
-            .clone()
-    }
-
-    /// Given a settings data, return the data
-    ///
-    /// This is just a wrapper for settings_data.serenity_context.data::<Data>().clone()
-    pub fn get_data(settings_data: &ar_settings::types::SettingsData) -> Arc<Self> {
-        settings_data.serenity_context.data::<Data>().clone()
     }
 }
 
@@ -73,6 +33,10 @@ where
 {
     /// Converts the props to std::any::Any
     fn as_any(&self) -> &(dyn std::any::Any + Send + Sync);
+
+    fn slot(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        None
+    }
 
     /// Extra description of the service
     fn extra_description(&self) -> String;

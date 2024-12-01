@@ -49,12 +49,17 @@ pub fn create_blank_rpc_server() -> Router<AppData> {
 pub async fn start_rpc_server(
     opts: CreateRpcServerOptions,
     mut make_service: axum::routing::IntoMakeService<Router>,
-) -> Result<(), silverpelt::Error> {
+) {
     match opts.bind {
         CreateRpcServerBind::Address(addr) => {
-            let listener = tokio::net::TcpListener::bind(addr).await?;
+            let listener = tokio::net::TcpListener::bind(addr)
+                .await
+                .expect("Failed to bind address");
 
-            log::info!("Listening on {}", listener.local_addr()?);
+            log::info!(
+                "Listening on {}",
+                listener.local_addr().expect("Failed to get local addr")
+            );
 
             loop {
                 let (socket, _remote_addr) = match listener.accept().await {
@@ -90,9 +95,11 @@ pub async fn start_rpc_server(
 
             let _ = tokio::fs::remove_file(&path).await;
 
-            tokio::fs::create_dir_all(path.parent().unwrap()).await?;
+            tokio::fs::create_dir_all(path.parent().unwrap())
+                .await
+                .expect("Failed to create parent directory");
 
-            let uds = UnixListener::bind(path.clone()).unwrap();
+            let uds = UnixListener::bind(path.clone()).expect("Failed to bind unix socket");
 
             loop {
                 let (socket, _remote_addr) = match uds.accept().await {

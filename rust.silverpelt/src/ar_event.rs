@@ -1,13 +1,12 @@
 use crate::data::Data;
-use crate::Error;
 use std::sync::Arc;
 
 pub use typetag; // Re-exported
 
-pub struct EventHandlerContext<'a> {
+pub struct EventHandlerContext {
     pub guild_id: serenity::all::GuildId,
     pub data: Arc<Data>,
-    pub event: AntiraidEvent<'a>,
+    pub event: AntiraidEvent,
     pub serenity_context: serenity::all::Context,
 }
 
@@ -19,12 +18,9 @@ pub struct CustomEvent {
     pub event_data: serde_json::Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[must_use]
-pub enum AntiraidEvent<'a> {
-    /// A regular discord event
-    Discord(&'a serenity::all::FullEvent),
-
+pub enum AntiraidEvent {
     /// A sting create event. Dispatched when a sting is created
     StingCreate(super::stings::Sting),
 
@@ -49,63 +45,33 @@ pub enum AntiraidEvent<'a> {
     Custom(CustomEvent),
 }
 
-/// Dispatches an event to all modules sequentially
-///
-/// This works well because Anti-Raid uses very few event listeners (only 2)
-pub async fn dispatch_event_to_modules<'a>(
-    event_handler_context: &EventHandlerContext<'a>,
-) -> Result<(), Vec<Error>> {
-    let mut errors = Vec::new();
+impl AntiraidEvent {
+    /// Dispatch the event to the template worker process
+    pub async fn dispatch_to_template_worker(
+        &self,
+        data: &Data,
+        guild_id: serenity::all::GuildId,
+    ) -> Result<serde_json::Value, crate::Error> {
+        let url = format!(
+            "http://{}:{}/dispatch-event/{}",
+            config::CONFIG.base_ports.template_worker_addr,
+            config::CONFIG.base_ports.template_worker_port,
+            guild_id
+        );
 
-    for refs in event_handler_context
-        .data
-        .silverpelt_cache
-        .module_cache
-        .iter()
-    {
-        let module = refs.value();
+        let resp = data.reqwest.post(&url).json(&self).send().await?;
 
-        // To reduce DB calls / actually expensive work, check for event listeners first and then check the filter
-        let Some(event_listeners) = module.event_listeners() else {
-            continue;
-        };
+        if resp.status().is_success() {
+            let json = resp.json::<serde_json::Value>().await?;
 
-        if !event_listeners.event_handler_filter(&event_handler_context.event) {
-            continue;
-        }
+            Ok(json)
+        } else {
+            let err_text = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
 
-        let module_enabled = {
-            match crate::module_config::is_module_enabled(
-                &event_handler_context.data.silverpelt_cache,
-                &event_handler_context.data.pool,
-                event_handler_context.guild_id,
-                module.id(),
-            )
-            .await
-            {
-                Ok(enabled) => enabled,
-                Err(e) => {
-                    errors.push(format!("Error getting module enabled status: {}", e).into());
-                    continue;
-                }
-            }
-        };
-
-        if !module_enabled {
-            continue;
-        }
-
-        match event_listeners.event_handler(event_handler_context).await {
-            Ok(_) => {}
-            Err(e) => {
-                errors.push(e);
-            }
+            Err(err_text.into())
         }
     }
-
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-
-    Ok(())
 }
