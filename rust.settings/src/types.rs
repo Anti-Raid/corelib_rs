@@ -55,10 +55,7 @@ pub enum SettingsError {
 }
 
 pub struct SettingsData {
-    pub pool: sqlx::PgPool,
-    pub reqwest: reqwest::Client,
-    pub object_store: Arc<splashcore_rs::objectstore::ObjectStore>,
-    pub cache_http: botox::cache::CacheHttpImpl,
+    pub data: Arc<silverpelt::data::Data>,
     pub serenity_context: serenity::all::Context,
 }
 

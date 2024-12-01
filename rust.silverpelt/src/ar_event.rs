@@ -45,6 +45,7 @@ pub enum AntiraidEvent {
     Custom(CustomEvent),
 }
 
+#[cfg(feature = "template-worker-dispatch")]
 impl AntiraidEvent {
     /// Dispatch the event to the template worker process
     pub async fn dispatch_to_template_worker(

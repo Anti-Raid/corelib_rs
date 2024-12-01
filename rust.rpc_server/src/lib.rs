@@ -26,7 +26,6 @@ pub struct CreateRpcServerOptions {
 #[derive(Clone)]
 pub struct AppData {
     pub data: Arc<silverpelt::data::Data>,
-    pub cache_http: Arc<botox::cache::CacheHttpImpl>,
     pub serenity_context: serenity::all::Context,
 }
 
@@ -35,7 +34,6 @@ impl AppData {
         Self {
             data,
             serenity_context: ctx.clone(),
-            cache_http: Arc::new(botox::cache::CacheHttpImpl::from_ctx(ctx)),
         }
     }
 }

@@ -73,8 +73,9 @@ pub fn get_critical_roles(
     }
 }
 
-pub struct LockdownData {
-    pub cache_http: botox::cache::CacheHttpImpl,
+pub struct LockdownData<'a> {
+    pub cache: &'a serenity::all::Cache,
+    pub http: &'a serenity::all::Http,
     pub pool: sqlx::PgPool,
     pub reqwest: reqwest::Client,
     pub object_store: Arc<splashcore_rs::objectstore::ObjectStore>,
@@ -547,9 +548,9 @@ impl LockdownSet {
             .sort_by(|a, b| b.r#type.specificity().cmp(&a.r#type.specificity()));
     }
 
-    pub async fn get_handles(
+    pub async fn get_handles<'a>(
         &self,
-        lockdown_data: &LockdownData,
+        lockdown_data: &LockdownData<'a>,
         pg: &serenity::all::PartialGuild,
         pgc: &[serenity::all::GuildChannel],
     ) -> Result<LockdownModeHandles, silverpelt::Error> {
@@ -579,14 +580,15 @@ impl LockdownSet {
     }
 
     /// Helper method to apply a lockdown without needing to manually perform fetches
-    pub async fn easy_apply(
+    pub async fn easy_apply<'a>(
         &mut self,
         lockdown_type: Box<dyn LockdownMode>,
-        lockdown_data: &LockdownData,
+        lockdown_data: &LockdownData<'a>,
         reason: &str,
     ) -> Result<sqlx::types::Uuid, silverpelt::Error> {
         let mut pg = sandwich_driver::guild(
-            &lockdown_data.cache_http,
+            &lockdown_data.cache,
+            &lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -594,7 +596,8 @@ impl LockdownSet {
         .map_err(|e| format!("Error while creating proxy guild: {}", e))?;
 
         let mut pgc = sandwich_driver::guild_channels(
-            &lockdown_data.cache_http,
+            &lockdown_data.cache,
+            &lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -606,10 +609,10 @@ impl LockdownSet {
     }
 
     /// Adds a lockdown to the set returning the id of the created entry
-    pub async fn apply(
+    pub async fn apply<'a>(
         &mut self,
         lockdown_type: Box<dyn LockdownMode>,
-        lockdown_data: &LockdownData,
+        lockdown_data: &LockdownData<'a>,
         reason: &str,
         pg: &mut serenity::all::PartialGuild,
         pgc: &mut [serenity::all::GuildChannel],
@@ -673,13 +676,14 @@ impl LockdownSet {
     }
 
     /// Helper method to apply a lockdown without needing to manually perform fetches
-    pub async fn easy_remove(
+    pub async fn easy_remove<'a>(
         &mut self,
         id: sqlx::types::Uuid,
-        lockdown_data: &LockdownData,
+        lockdown_data: &LockdownData<'a>,
     ) -> Result<(), silverpelt::Error> {
         let mut pg = sandwich_driver::guild(
-            &lockdown_data.cache_http,
+            &lockdown_data.cache,
+            &lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -687,7 +691,8 @@ impl LockdownSet {
         .map_err(|e| format!("Error while creating proxy guild: {}", e))?;
 
         let mut pgc = sandwich_driver::guild_channels(
-            &lockdown_data.cache_http,
+            &lockdown_data.cache,
+            &lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -698,10 +703,10 @@ impl LockdownSet {
     }
 
     /// Removes a lockdown from the set
-    pub async fn remove(
+    pub async fn remove<'a>(
         &mut self,
         id: sqlx::types::Uuid,
-        lockdown_data: &LockdownData,
+        lockdown_data: &LockdownData<'a>,
         pg: &mut serenity::all::PartialGuild,
         pgc: &mut [serenity::all::GuildChannel],
     ) -> Result<(), silverpelt::Error> {
@@ -761,9 +766,9 @@ impl LockdownSet {
     }
 
     /// Remove all lockdowns in order of specificity
-    pub async fn remove_all(
+    pub async fn remove_all<'a>(
         &mut self,
-        lockdown_data: &LockdownData,
+        lockdown_data: &LockdownData<'a>,
         pg: &mut serenity::all::PartialGuild,
         pgc: &mut [serenity::all::GuildChannel],
     ) -> Result<(), silverpelt::Error> {
@@ -994,7 +999,7 @@ pub mod qsl {
                     new_roles.push(
                         pg.id
                             .edit_role(
-                                &lockdown_data.cache_http.http,
+                                &lockdown_data.http,
                                 role.id,
                                 serenity::all::EditRole::new().permissions(*LOCKDOWN_PERMS),
                             )
@@ -1035,7 +1040,7 @@ pub mod qsl {
                     new_roles.push(
                         pg.id
                             .edit_role(
-                                &lockdown_data.cache_http.http,
+                                &lockdown_data.http,
                                 role.id,
                                 serenity::all::EditRole::new().permissions(perms),
                             )
@@ -1254,7 +1259,7 @@ pub mod tsl {
 
                 match channel
                     .edit(
-                        &lockdown_data.cache_http.http,
+                        &lockdown_data.http,
                         serenity::all::EditChannel::new().permissions(overwrites),
                     )
                     .await
@@ -1324,7 +1329,7 @@ pub mod tsl {
 
                 match channel
                     .edit(
-                        &lockdown_data.cache_http.http,
+                        &lockdown_data.http,
                         serenity::all::EditChannel::new().permissions(overwrites),
                     )
                     .await
@@ -1561,7 +1566,7 @@ pub mod scl {
 
             self.0
                 .edit(
-                    &lockdown_data.cache_http.http,
+                    &lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;
@@ -1590,7 +1595,7 @@ pub mod scl {
 
             self.0
                 .edit(
-                    &lockdown_data.cache_http.http,
+                    &lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;
@@ -1837,7 +1842,7 @@ pub mod role {
             // 1. Edit the role
             pg.id
                 .edit_role(
-                    &lockdown_data.cache_http.http,
+                    &lockdown_data.http,
                     self.0,
                     serenity::all::EditRole::new().permissions(serenity::all::Permissions::empty()),
                 )
@@ -1867,7 +1872,7 @@ pub mod role {
                 }
 
                 ch.edit(
-                    &lockdown_data.cache_http.http,
+                    &lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;
@@ -1898,7 +1903,7 @@ pub mod role {
             // First edit the role itself
             pg.id
                 .edit_role(
-                    &lockdown_data.cache_http.http,
+                    &lockdown_data.http,
                     self.0,
                     serenity::all::EditRole::new().permissions(rld.global_perms),
                 )
@@ -1934,7 +1939,7 @@ pub mod role {
                 }
 
                 ch.edit(
-                    &lockdown_data.cache_http.http,
+                    &lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;

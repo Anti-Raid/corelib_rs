@@ -27,9 +27,5 @@ git = "https://github.com/Anti-Raid/serenity"
 branch = "next"
 features = ["model", "http", "cache", "rustls_backend", "unstable"]
 
-[dependencies.botox]
-git = "https://github.com/Anti-Raid/botox"
-branch = "main"
-
 [package.metadata.cargo-machete]
 ignored = ["uuid"]

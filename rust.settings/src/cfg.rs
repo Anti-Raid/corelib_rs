@@ -50,7 +50,9 @@ fn _parse_value(
                         if s.is_empty() {
                             match kind {
                                 InnerColumnTypeStringKind::Token { default_length } => {
-                                    Ok(Value::String(botox::crypto::gen_random(*default_length)))
+                                    Ok(Value::String(splashcore_rs::utils::gen_random(
+                                        *default_length,
+                                    )))
                                 }
                                 _ => Ok(Value::None),
                             }
@@ -60,9 +62,9 @@ fn _parse_value(
                     }
                     Value::Uuid(v) => Ok(Value::String(v.to_string())),
                     Value::None => match kind {
-                        InnerColumnTypeStringKind::Token { default_length } => {
-                            Ok(Value::String(botox::crypto::gen_random(*default_length)))
-                        }
+                        InnerColumnTypeStringKind::Token { default_length } => Ok(Value::String(
+                            splashcore_rs::utils::gen_random(*default_length),
+                        )),
                         _ => Ok(v),
                     },
                     _ => Err(SettingsError::SchemaTypeValidationError {
@@ -488,7 +490,7 @@ async fn _validate_value(
                                         guild_id.to_string(),
                                         s
                                     )
-                                    .fetch_one(&data.pool)
+                                    .fetch_one(&data.data.pool)
                                     .await
                                     .map_err(|e| SettingsError::SchemaCheckValidationError {
                                         column: column_id.to_string(),
@@ -538,8 +540,9 @@ async fn _validate_value(
 
                                     // Perform required checks
                                     let channel = sandwich_driver::channel(
-                                        &data.cache_http,
-                                        &data.reqwest,
+                                        &data.serenity_context.cache,
+                                        &data.serenity_context.http,
+                                        &data.data.reqwest,
                                         Some(guild_id),
                                         channel_id,
                                     )
@@ -595,8 +598,9 @@ async fn _validate_value(
                                                 data.serenity_context.cache.current_user().id;
 
                                             let bot_user = sandwich_driver::member_in_guild(
-                                                &data.cache_http,
-                                                &data.reqwest,
+                                                &data.serenity_context.cache,
+                                                &data.serenity_context.http,
+                                                &data.data.reqwest,
                                                 guild_id,
                                                 bot_user_id,
                                             )
@@ -626,8 +630,9 @@ async fn _validate_value(
                                         };
 
                                         let guild = sandwich_driver::guild(
-                                            &data.cache_http,
-                                            &data.reqwest,
+                                            &data.serenity_context.cache,
+                                            &data.serenity_context.http,
+                                            &data.data.reqwest,
                                             guild_id,
                                         )
                                         .await

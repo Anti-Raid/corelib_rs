@@ -1,3 +1,4 @@
+use rand::{distributions::Alphanumeric, Rng};
 use sqlx::postgres::types::PgInterval;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -298,4 +299,15 @@ pub mod value_utils {
             _ => map.get(variable).cloned().unwrap_or(Value::None),
         }
     }
+}
+
+/// Returns a random string of length ``length``
+pub fn gen_random(length: usize) -> String {
+    let s: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(length)
+        .map(char::from)
+        .collect();
+
+    s
 }

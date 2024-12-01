@@ -8,11 +8,12 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 /// Fetches a guild while handling all the pesky errors serenity normally has
 /// with caching
 pub async fn has_guild(
-    ctx: &botox::cache::CacheHttpImpl,
+    cache: &serenity::all::Cache,
+    http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: serenity::all::GuildId,
 ) -> Result<bool, Error> {
-    if ctx.cache.guilds().contains(&guild_id) {
+    if cache.guilds().contains(&guild_id) {
         return Ok(true);
     }
 
@@ -55,8 +56,7 @@ pub async fn has_guild(
     // Last resort: check if the guild is in the list using HTTP
     let guild_id_immediately_preceding = serenity::all::GuildId::new(guild_id.get() - 1);
 
-    let gi = match ctx
-        .http
+    let gi = match http
         .get_guilds(
             Some(serenity::all::GuildPagination::After(
                 guild_id_immediately_preceding,
@@ -92,13 +92,14 @@ pub async fn has_guild(
 /// Fetches a guild while handling all the pesky errors serenity normally has
 /// with caching
 pub async fn guild(
-    ctx: &botox::cache::CacheHttpImpl,
+    cache: &serenity::all::Cache,
+    http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: serenity::model::id::GuildId,
 ) -> Result<serenity::all::PartialGuild, Error> {
     // Check serenity cache
     {
-        let res = ctx.cache.guild(guild_id);
+        let res = cache.guild(guild_id);
 
         if let Some(res) = res {
             return Ok(res.clone().into());
@@ -142,7 +143,7 @@ pub async fn guild(
     }
 
     // Last resore: make the http call
-    let res = ctx.http.get_guild(guild_id).await?;
+    let res = http.get_guild(guild_id).await?;
 
     // Save to sandwich
     let url = format!(
@@ -165,13 +166,14 @@ pub async fn guild(
 
 /// Faster version of botox member in guild that also takes into account the sandwich proxy layer
 pub async fn member_in_guild(
-    ctx: &botox::cache::CacheHttpImpl,
+    cache: &serenity::all::Cache,
+    http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: serenity::model::id::GuildId,
     user_id: serenity::model::id::UserId,
 ) -> Result<Option<serenity::all::Member>, Error> {
     // Check serenity cache
-    if let Some(guild) = ctx.cache.guild(guild_id) {
+    if let Some(guild) = cache.guild(guild_id) {
         if let Some(member) = guild.members.get(&user_id).cloned() {
             return Ok(Some(member));
         }
@@ -221,7 +223,7 @@ pub async fn member_in_guild(
     }
 
     // Last resort, use botox to fetch from http and then update sandwich as well
-    let member = match ctx.http.get_member(guild_id, user_id).await {
+    let member = match http.get_member(guild_id, user_id).await {
         Ok(mem) => mem,
         Err(e) => match e {
             serenity::Error::Http(e) => match e {
@@ -259,13 +261,14 @@ pub async fn member_in_guild(
 
 /// Faster version of serenity guild_channels that also takes into account the sandwich proxy layer
 pub async fn guild_channels(
-    ctx: &botox::cache::CacheHttpImpl,
+    cache: &serenity::all::Cache,
+    http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: serenity::model::id::GuildId,
 ) -> Result<Vec<serenity::all::GuildChannel>, Error> {
     // Try serenity cache first
     {
-        if let Some(guild) = ctx.cache.guild(guild_id) {
+        if let Some(guild) = cache.guild(guild_id) {
             let channels = guild.channels.clone();
             return Ok(channels.into_iter().collect());
         };
@@ -313,7 +316,7 @@ pub async fn guild_channels(
     }
 
     // Last resort, fetch from http and then update sandwich as well
-    let channels = match ctx.http.get_channels(guild_id).await {
+    let channels = match http.get_channels(guild_id).await {
         Ok(mem) => mem,
         Err(e) => match e {
             serenity::Error::Http(e) => match e {
@@ -352,7 +355,8 @@ pub async fn guild_channels(
 }
 
 pub async fn channel(
-    ctx: &botox::cache::CacheHttpImpl,
+    cache: &serenity::all::Cache,
+    http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: Option<serenity::model::id::GuildId>,
     channel_id: serenity::model::id::ChannelId,
@@ -361,7 +365,7 @@ pub async fn channel(
     //
     // We do this to ensure that we get up to date information if possible
     if let Some(guild_id) = guild_id {
-        if let Some(guild) = ctx.cache.guild(guild_id) {
+        if let Some(guild) = cache.guild(guild_id) {
             let channels = guild.channels.clone();
 
             if let Some(channel) = channels.get(&channel_id) {
@@ -413,7 +417,7 @@ pub async fn channel(
     }
 
     // Last resort, fetch from http and then update sandwich as well
-    let channel = match channel_id.to_channel(&ctx, guild_id).await {
+    let channel = match http.get_channel(channel_id).await {
         Ok(channel) => channel,
         Err(e) => match e {
             serenity::Error::Http(e) => match e {
