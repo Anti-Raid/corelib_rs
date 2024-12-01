@@ -50,13 +50,23 @@ pub async fn start_rpc_server(
 ) -> ! {
     match opts.bind {
         CreateRpcServerBind::Address(addr) => {
-            let listener = tokio::net::TcpListener::bind(addr)
-                .await
-                .expect("Failed to bind address");
+            let listener = match tokio::net::TcpListener::bind(addr).await {
+                Ok(ok) => ok,
+                Err(err) => {
+                    log::error!("failed to bind to address: {err:#}");
+                    std::process::exit(1);
+                }
+            };
 
             log::info!(
                 "Listening on {}",
-                listener.local_addr().expect("Failed to get local addr")
+                match listener.local_addr() {
+                    Ok(ok) => ok.to_string(),
+                    Err(err) => {
+                        log::error!("failed to get local address: {err:#}");
+                        std::process::exit(1);
+                    }
+                }
             );
 
             loop {
@@ -93,11 +103,21 @@ pub async fn start_rpc_server(
 
             let _ = tokio::fs::remove_file(&path).await;
 
-            tokio::fs::create_dir_all(path.parent().unwrap())
-                .await
-                .expect("Failed to create parent directory");
+            match tokio::fs::create_dir_all(path.parent().unwrap()).await {
+                Ok(ok) => ok,
+                Err(err) => {
+                    log::error!("failed to create parent directory: {err:#}");
+                    std::process::exit(1);
+                }
+            }
 
-            let uds = UnixListener::bind(path.clone()).expect("Failed to bind unix socket");
+            let uds = match UnixListener::bind(path.clone()) {
+                Ok(ok) => ok,
+                Err(err) => {
+                    log::error!("failed to bind to unix socket: {err:#}");
+                    std::process::exit(1);
+                }
+            };
 
             loop {
                 let (socket, _remote_addr) = match uds.accept().await {
