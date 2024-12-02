@@ -1,5 +1,5 @@
 use log::warn;
-use serenity::all::{FullEvent, GuildId, UserId};
+use serenity::all::{FullEvent, GuildId, Interaction, UserId};
 use strum::VariantNames;
 
 /// Returns all events
@@ -85,7 +85,26 @@ pub fn get_event_guild_id(event: &FullEvent) -> Option<GuildId> {
                 return None;
             }
         }
-        FullEvent::InteractionCreate { .. } => return None, // We dont handle interactions create events in event handlers
+        FullEvent::InteractionCreate { ref interaction } => match interaction {
+            Interaction::Ping(_) => return None,
+            Interaction::Command(command) => match command.guild_id {
+                Some(guild_id) => guild_id,
+                None => return None,
+            },
+            Interaction::Autocomplete(autocomplete) => match autocomplete.guild_id {
+                Some(guild_id) => guild_id,
+                None => return None,
+            },
+            Interaction::Component(component) => match component.guild_id {
+                Some(guild_id) => guild_id,
+                None => return None,
+            },
+            Interaction::Modal(component) => match component.guild_id {
+                Some(guild_id) => guild_id,
+                None => return None,
+            },
+            _ => return None,
+        },
         FullEvent::InviteCreate { data, .. } => {
             if let Some(guild_id) = data.guild_id {
                 guild_id.to_owned()

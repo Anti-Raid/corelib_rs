@@ -16,3 +16,18 @@ pub mod message_limits {
     pub const MESSAGE_ATTACHMENT_CONTENT_BYTES_LIMIT: usize = 8 * 1024 * 1024; // 8 MB
     pub const MESSAGE_MAX_ATTACHMENT_COUNT: usize = 3;
 }
+
+pub mod command_name_limits {
+    pub const RESERVED_COMMAND_NAMES: &[&str] = &[
+        "help",
+        "stats",
+        "ping",
+        "whois",
+        "modules",
+        "commands",
+        "web",
+        "lockdowns",
+        "moderation",
+        "backups",
+    ];
+}
