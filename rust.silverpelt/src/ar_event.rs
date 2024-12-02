@@ -24,6 +24,9 @@ pub enum AntiraidEvent {
     /// A sting create event. Dispatched when a sting is created
     StingCreate(super::stings::Sting),
 
+    /// A sting update event. Dispatched when a sting is updated
+    StingUpdate(super::stings::Sting),
+
     /// A sting expiry event. Dispatched when a sting expires
     StingExpire(super::stings::Sting),
 

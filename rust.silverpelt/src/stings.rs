@@ -2,17 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 /// Represents a sting on AntiRaid
-///
-/// Previous versions of AntiRaid had each module handle their own stings sharing them via a StingSource trAIT, but this was changed to a centralised system
-/// to reduce database calls, reduce boilerplate, reduce data duplication, to make it easier to add new modules, and to make the bot easier to use,
-/// understand and manage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sting {
     /// The sting ID
     pub id: sqlx::types::Uuid,
-    /// The module name
-    pub module: String,
-    /// Src of the sting, this can be useful if a module wants to store the source of the sting
+    /// Src of the sting, this can be useful to store the source of a sting
     pub src: Option<String>,
     /// The number of stings
     pub stings: i32,
@@ -41,6 +35,44 @@ pub struct Sting {
 }
 
 impl Sting {
+    /// Returns a sting by ID
+    pub async fn get(
+        db: impl sqlx::PgExecutor<'_>,
+        guild_id: serenity::all::GuildId,
+        id: sqlx::types::Uuid,
+    ) -> Result<Option<Sting>, crate::Error> {
+        let rec = sqlx::query!(
+            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE id = $1 AND guild_id = $2",
+            id,
+            guild_id.to_string(),
+        )
+        .fetch_optional(db)
+        .await?;
+
+        match rec {
+            Some(row) => Ok(Some(Sting {
+                id: row.id,
+                src: row.src,
+                stings: row.stings,
+                reason: row.reason,
+                void_reason: row.void_reason,
+                guild_id: row.guild_id.parse()?,
+                creator: StingTarget::from_str(&row.creator)?,
+                target: StingTarget::from_str(&row.target)?,
+                state: StingState::from_str(&row.state)?,
+                sting_data: row.sting_data,
+                created_at: row.created_at,
+                duration: row.duration.map(|d| {
+                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    std::time::Duration::from_secs(secs.try_into().unwrap())
+                }),
+                is_handled: row.is_handled,
+                handle_log: row.handle_log,
+            })),
+            None => Ok(None),
+        }
+    }
+
     /// Lists stings for a guild paginated based on page number
     pub async fn list(
         db: impl sqlx::PgExecutor<'_>,
@@ -56,7 +88,7 @@ impl Sting {
         let page = std::cmp::max(page, 1) as i64; // Avoid negative pages
 
         let rec = sqlx::query!(
-            "SELECT id, module, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE guild_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
+            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE guild_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
             guild_id.to_string(),
             (page - 1) * PAGE_SIZE,
             PAGE_SIZE,
@@ -69,7 +101,6 @@ impl Sting {
         for row in rec {
             stings.push(Sting {
                 id: row.id,
-                module: row.module,
                 src: row.src,
                 stings: row.stings,
                 reason: row.reason,
@@ -94,7 +125,7 @@ impl Sting {
 
     pub async fn get_expired(db: impl sqlx::PgExecutor<'_>) -> Result<Vec<Sting>, crate::Error> {
         let rec = sqlx::query!(
-            "SELECT id, module, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE duration IS NOT NULL AND is_handled = false AND (created_at + duration) < NOW()",
+            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE duration IS NOT NULL AND is_handled = false AND (created_at + duration) < NOW()",
         )
         .fetch_all(db)
         .await?;
@@ -104,7 +135,6 @@ impl Sting {
         for row in rec {
             stings.push(Sting {
                 id: row.id,
-                module: row.module,
                 src: row.src,
                 stings: row.stings,
                 reason: row.reason,
@@ -142,6 +172,20 @@ impl Sting {
     }
 
     #[cfg(feature = "template-worker-dispatch")]
+    /// Dispatch a StingUpdate event
+    pub async fn dispatch_update_event(
+        self,
+        ctx: serenity::all::Context,
+    ) -> Result<(), crate::Error> {
+        let guild_id = self.guild_id;
+        crate::ar_event::AntiraidEvent::StingUpdate(self.into())
+            .dispatch_to_template_worker(&ctx.data::<crate::data::Data>(), guild_id)
+            .await?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "template-worker-dispatch")]
     /// Dispatch a StingDelete event
     pub async fn dispatch_delete_event(
         self,
@@ -155,8 +199,48 @@ impl Sting {
         Ok(())
     }
 
+    /// Updates the database from the Sting data
+    pub async fn update_without_dispatch(
+        &self,
+        db: impl sqlx::PgExecutor<'_>,
+    ) -> Result<(), crate::Error> {
+        sqlx::query!(
+            "UPDATE stings SET src = $1, stings = $2, reason = $3, void_reason = $4, creator = $5, target = $6, state = $7, duration = make_interval(secs => $8), sting_data = $9, is_handled = $10, handle_log = $11 WHERE id = $12 AND guild_id = $13",
+            self.src,
+            self.stings,
+            self.reason,
+            self.void_reason,
+            self.creator.to_string(),
+            self.target.to_string(),
+            self.state.to_string(),
+            self.duration.map(|d| d.as_secs() as f64),
+            self.sting_data,
+            self.is_handled,
+            self.handle_log,
+            self.id,
+            self.guild_id.to_string(),
+        )
+        .execute(db)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Updates the sting and dispatches a StingUpdate event
+    pub async fn update_and_dispatch(
+        self,
+        db: impl sqlx::PgExecutor<'_>,
+        ctx: serenity::all::Context,
+    ) -> Result<(), crate::Error> {
+        self.update_without_dispatch(db).await?;
+
+        self.dispatch_update_event(ctx).await?;
+
+        Ok(())
+    }
+
     /// Deletes a sting by ID
-    pub async fn delete_by_id(
+    pub async fn delete_without_dispatch(
         db: impl sqlx::PgExecutor<'_>,
         guild_id: serenity::all::GuildId,
         id: sqlx::types::Uuid,
@@ -171,14 +255,26 @@ impl Sting {
 
         Ok(())
     }
+
+    #[cfg(feature = "template-worker-dispatch")]
+    /// Deletes a sting by ID and dispatches a StingDelete event
+    pub async fn delete_and_dispatch(
+        self,
+        db: impl sqlx::PgExecutor<'_>,
+        ctx: serenity::all::Context,
+    ) -> Result<(), crate::Error> {
+        Self::delete_without_dispatch(db, self.guild_id, self.id).await?;
+
+        self.dispatch_delete_event(ctx).await?;
+
+        Ok(())
+    }
 }
 
 /// Data required to create a sting
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StingCreate {
-    /// The module name
-    pub module: String,
-    /// Src of the sting, this can be useful if a module wants to store the source of the sting
+    /// Src of the sting, this can be useful to store the source of the sting
     pub src: Option<String>,
     /// The number of stings
     pub stings: i32,
@@ -208,7 +304,6 @@ impl StingCreate {
     ) -> Sting {
         Sting {
             id,
-            module: self.module,
             src: self.src,
             stings: self.stings,
             reason: self.reason,
@@ -232,10 +327,9 @@ impl StingCreate {
     ) -> Result<Sting, crate::Error> {
         let ret_data = sqlx::query!(
             r#"
-            INSERT INTO stings (module, src, stings, reason, void_reason, guild_id, target, creator, state, duration, sting_data)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, make_interval(secs => $10), $11) RETURNING id, created_at
+            INSERT INTO stings (src, stings, reason, void_reason, guild_id, target, creator, state, duration, sting_data)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9), $10) RETURNING id, created_at
             "#,
-            self.module,
             self.src,
             self.stings,
             self.reason,
@@ -392,8 +486,6 @@ impl<'de> Deserialize<'de> for StingState {
 }
 
 pub struct StingAggregate {
-    /// The module name
-    pub module: String,
     /// Src of the sting, this can be useful if a module wants to store the source of the sting
     pub src: Option<String>,
     /// The target of the sting
@@ -445,7 +537,7 @@ pub async fn get_aggregate_stings_for_guild_user(
     target: serenity::all::UserId,
 ) -> Result<Vec<StingAggregate>, crate::Error> {
     let rec = sqlx::query!(
-        "SELECT COUNT(*) AS total_stings, module, src, target FROM stings WHERE guild_id = $1 AND (target = $2 OR target = 'system') GROUP BY module, src, target",
+        "SELECT COUNT(*) AS total_stings, src, target FROM stings WHERE guild_id = $1 AND (target = $2 OR target = 'system') GROUP BY src, target",
         guild_id.to_string(),
         StingTarget::User(target).to_string(),
     )
@@ -456,7 +548,6 @@ pub async fn get_aggregate_stings_for_guild_user(
 
     for row in rec {
         stings.push(StingAggregate {
-            module: row.module,
             src: row.src,
             target: StingTarget::from_str(&row.target)?,
             total_stings: row.total_stings.unwrap_or_default(),
@@ -471,7 +562,7 @@ pub async fn get_aggregate_stings_for_guild(
     guild_id: serenity::all::GuildId,
 ) -> Result<Vec<StingAggregate>, crate::Error> {
     let rec = sqlx::query!(
-        "SELECT SUM(stings) AS total_stings, module, src, target FROM stings WHERE guild_id = $1 GROUP BY module, src, target",
+        "SELECT SUM(stings) AS total_stings, src, target FROM stings WHERE guild_id = $1 GROUP BY src, target",
         guild_id.to_string(),
     )
     .fetch_all(db)
@@ -481,7 +572,6 @@ pub async fn get_aggregate_stings_for_guild(
 
     for row in rec {
         stings.push(StingAggregate {
-            module: row.module,
             src: row.src,
             target: StingTarget::from_str(&row.target)?,
             total_stings: row.total_stings.unwrap_or_default(),
