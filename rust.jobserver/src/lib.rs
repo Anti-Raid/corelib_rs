@@ -42,7 +42,7 @@ pub struct Job {
     pub output: Option<Output>,
     pub fields: IndexMap<String, serde_json::Value>,
     pub statuses: Vec<Statuses>,
-    pub owner: Owner,
+    pub guild_id: serenity::all::GuildId,
     pub expiry: Option<chrono::Duration>,
     pub state: String,
     pub resumable: bool,
@@ -79,7 +79,6 @@ impl From<String> for Owner {
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Output {
     pub filename: String,
-    pub segregated: bool,
 }
 
 /// JobCreateResponse is the response upon creation of a job
@@ -93,7 +92,7 @@ impl Job {
     /// Fetches a task from the database based on id
     pub async fn from_id(id: Uuid, pool: &PgPool) -> Result<Self, splashcore_rs::Error> {
         let rec = sqlx::query!(
-            "SELECT id, name, output, statuses, owner, expiry, state, created_at, fields, resumable FROM jobs WHERE id = $1 ORDER BY created_at DESC",
+            "SELECT id, name, output, statuses, guild_id, expiry, state, created_at, fields, resumable FROM jobs WHERE id = $1 ORDER BY created_at DESC",
             id,
         )
         .fetch_one(pool)
@@ -115,7 +114,7 @@ impl Job {
                 .transpose()?,
             fields: serde_json::from_value::<IndexMap<String, serde_json::Value>>(rec.fields)?,
             statuses,
-            owner: rec.owner.into(),
+            guild_id: rec.guild_id.parse()?,
             expiry: {
                 if let Some(expiry) = rec.expiry {
                     let t = expiry.microseconds
@@ -142,8 +141,8 @@ impl Job {
         pool: &sqlx::PgPool,
     ) -> Result<Vec<Self>, splashcore_rs::Error> {
         let recs = sqlx::query!(
-            "SELECT id, name, output, statuses, owner, expiry, state, created_at, fields, resumable FROM jobs WHERE owner = $1",
-            format!("g/{}", guild_id)
+            "SELECT id, name, output, statuses, expiry, state, created_at, fields, resumable FROM jobs WHERE guild_id = $1",
+            guild_id.to_string()
         )
         .fetch_all(pool)
         .await?;
@@ -167,7 +166,7 @@ impl Job {
                     .transpose()?,
                 fields: serde_json::from_value::<IndexMap<String, serde_json::Value>>(rec.fields)?,
                 statuses,
-                owner: rec.owner.into(),
+                guild_id,
                 expiry: {
                     if let Some(expiry) = rec.expiry {
                         let t = expiry.microseconds
@@ -197,8 +196,8 @@ impl Job {
         pool: &sqlx::PgPool,
     ) -> Result<Vec<Self>, splashcore_rs::Error> {
         let recs = sqlx::query!(
-            "SELECT id, name, output, statuses, owner, expiry, state, created_at, fields, resumable FROM jobs WHERE owner = $1 AND name = $2",
-            format!("g/{}", guild_id),
+            "SELECT id, name, output, statuses, guild_id, expiry, state, created_at, fields, resumable FROM jobs WHERE guild_id = $1 AND name = $2",
+            guild_id.to_string(),
             name,
         )
         .fetch_all(pool)
@@ -223,7 +222,7 @@ impl Job {
                     .transpose()?,
                 fields: serde_json::from_value::<IndexMap<String, serde_json::Value>>(rec.fields)?,
                 statuses,
-                owner: rec.owner.into(),
+                guild_id,
                 expiry: {
                     if let Some(expiry) = rec.expiry {
                         let t = expiry.microseconds
@@ -246,33 +245,12 @@ impl Job {
         Ok(jobs)
     }
 
-    pub fn format_owner_simplex(&self) -> String {
-        format!(
-            "{}/{}",
-            self.owner.target_type.to_lowercase(),
-            self.owner.id
-        )
-    }
-
-    pub fn get_path(&self) -> Option<String> {
-        if let Some(output) = &self.output {
-            if output.segregated {
-                Some(format!(
-                    "{}/{}/{}",
-                    self.format_owner_simplex(),
-                    self.name,
-                    self.id,
-                ))
-            } else {
-                Some(format!("jobs/{}", self.id))
-            }
-        } else {
-            None
-        }
+    pub fn get_path(&self) -> String {
+        format!("jobs/{}", self.id)
     }
 
     pub fn get_file_path(&self) -> Option<String> {
-        let path = self.get_path()?;
+        let path = self.get_path();
 
         self.output
             .as_ref()
@@ -299,9 +277,7 @@ impl Job {
         object_store: &ObjectStore,
     ) -> Result<(), splashcore_rs::Error> {
         // Check if the job has an output
-        let Some(path) = self.get_path() else {
-            return Err("Job has no output".into());
-        };
+        let path = self.get_path();
 
         let Some(outp) = &self.output else {
             return Err("Job has no output".into());
