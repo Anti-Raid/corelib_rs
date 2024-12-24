@@ -49,9 +49,6 @@ pub enum SettingsError {
         max: usize,
         current: usize,
     },
-    PermissionError {
-        result: permissions::types::PermissionResult,
-    },
 }
 
 pub struct SettingsData {

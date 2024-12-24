@@ -304,15 +304,12 @@ fn _parse_value(
                     // Convert back to json to get bytes
                     match v {
                         Value::String(s) => {
-                            if s.as_bytes().len() > max_bytes.unwrap_or(0) {
+                            if s.len() > max_bytes.unwrap_or(0) {
                                 return Err(SettingsError::SchemaCheckValidationError {
                                     column: column_id.to_string(),
                                     check: "json_max_bytes".to_string(),
                                     accepted_range: format!("<{}", max_bytes.unwrap_or(0)),
-                                    error: format!(
-                                        "s.as_bytes().len() > *max_bytes: {}",
-                                        s.as_bytes().len()
-                                    ),
+                                    error: format!("s.len() > *max_bytes: {}", s.len()),
                                 });
                             }
 
@@ -344,15 +341,12 @@ fn _parse_value(
                             })?;
 
                             if let Some(max_bytes) = max_bytes {
-                                if bytes.as_bytes().len() > *max_bytes {
+                                if bytes.len() > *max_bytes {
                                     return Err(SettingsError::SchemaCheckValidationError {
                                         column: column_id.to_string(),
                                         check: "json_max_bytes".to_string(),
                                         accepted_range: format!("<{}", max_bytes),
-                                        error: format!(
-                                            "json.as_bytes().len() > *max_bytes: {}",
-                                            bytes.as_bytes().len()
-                                        ),
+                                        error: format!("json.len() > *max_bytes: {}", bytes.len()),
                                     });
                                 }
                             }
@@ -376,15 +370,12 @@ fn _parse_value(
                 })?;
 
                 if let Some(max_bytes) = max_bytes {
-                    if json.as_bytes().len() > *max_bytes {
+                    if json.len() > *max_bytes {
                         return Err(SettingsError::SchemaCheckValidationError {
                             column: column_id.to_string(),
                             check: "json_max_bytes".to_string(),
                             accepted_range: format!("<{}", max_bytes),
-                            error: format!(
-                                "json.as_bytes().len() > *max_bytes: {}",
-                                json.as_bytes().len()
-                            ),
+                            error: format!("json.len() > *max_bytes: {}", json.len()),
                         });
                     }
                 }
@@ -470,7 +461,7 @@ async fn _validate_value(
                                 }
                             }
 
-                            if !allowed_values.is_empty() && !allowed_values.contains(&s) {
+                            if !allowed_values.is_empty() && !allowed_values.contains(s) {
                                 return Err(SettingsError::SchemaCheckValidationError {
                                     column: column_id.to_string(),
                                     check: "allowed_values".to_string(),
