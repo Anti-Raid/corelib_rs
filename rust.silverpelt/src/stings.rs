@@ -157,7 +157,6 @@ impl Sting {
         Ok(stings)
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Dispatch a StingCreate event
     pub async fn dispatch_create_event(
         self,
@@ -171,7 +170,6 @@ impl Sting {
         Ok(())
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Dispatch a StingUpdate event
     pub async fn dispatch_update_event(
         self,
@@ -185,7 +183,6 @@ impl Sting {
         Ok(())
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Dispatch a StingDelete event
     pub async fn dispatch_delete_event(
         self,
@@ -256,7 +253,6 @@ impl Sting {
         Ok(())
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Deletes a sting by ID and dispatches a StingDelete event
     pub async fn delete_and_dispatch(
         self,
@@ -347,7 +343,6 @@ impl StingCreate {
         Ok(self.to_sting(ret_data.id, ret_data.created_at))
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Creates a new Sting and dispatches it as an event in one go
     pub async fn create_and_dispatch(
         self,
@@ -361,7 +356,6 @@ impl StingCreate {
         Ok(())
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Creates a new Sting and dispatches it as an event in one go
     pub async fn create_and_dispatch_returning_id(
         self,

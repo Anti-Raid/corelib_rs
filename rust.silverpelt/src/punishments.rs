@@ -69,7 +69,6 @@ impl Punishment {
         Ok(punishments)
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Dispatch a PunishmentCreate event
     pub async fn dispatch_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
@@ -157,7 +156,6 @@ impl PunishmentCreate {
         Ok(self.to_punishment(ret_data.id, ret_data.created_at, ret_data.is_handled))
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Creates a new Punishment and dispatches it as an event in one go
     pub async fn create_and_dispatch(
         self,
@@ -171,7 +169,6 @@ impl PunishmentCreate {
         Ok(())
     }
 
-    #[cfg(feature = "template-worker-dispatch")]
     /// Creates a new Punishment and dispatches it as an event in one go
     pub async fn create_and_dispatch_returning_id(
         self,

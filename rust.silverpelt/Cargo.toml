@@ -30,6 +30,3 @@ features = ["model", "http", "cache", "rustls_backend", "unstable"]
 git = "https://github.com/infinitybotlist/kittycat"
 branch = "main"
 
-[features]
-default = []
-template-worker-dispatch = []
