@@ -1,10 +1,10 @@
-use axum::{http::Request, routing::get, Router};
+use axum::{http::Request, Router};
 use hyper::body::Incoming;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server,
 };
-use std::{convert::Infallible, path::PathBuf, sync::Arc};
+use std::{convert::Infallible, path::PathBuf};
 use tokio::net::UnixListener;
 use tower_service::Service;
 
@@ -21,27 +21,6 @@ pub enum CreateRpcServerBind {
 pub struct CreateRpcServerOptions {
     /// The bind address for the RPC server
     pub bind: CreateRpcServerBind,
-}
-
-#[derive(Clone)]
-pub struct AppData {
-    pub data: Arc<silverpelt::data::Data>,
-    pub serenity_context: serenity::all::Context,
-}
-
-impl AppData {
-    pub fn new(data: Arc<silverpelt::data::Data>, ctx: &serenity::all::Context) -> Self {
-        Self {
-            data,
-            serenity_context: ctx.clone(),
-        }
-    }
-}
-
-pub fn create_blank_rpc_server() -> Router<AppData> {
-    Router::new()
-        .layer(tower_http::trace::TraceLayer::new_for_http())
-        .route("/", get(|| async { "bot" }))
 }
 
 pub async fn start_rpc_server(
