@@ -87,7 +87,7 @@ pub fn reactive(
             state.prev_job = Some(job.clone());
             state.last_statuschange = tokio::time::Instant::now();
 
-            return Some((Ok(Some(job.clone())), state));
+            Some((Ok(Some(job.clone())), state))
         },
     ))
 }

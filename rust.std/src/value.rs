@@ -101,13 +101,13 @@ impl Value {
     pub fn from_json(value: &serde_json::Value) -> Self {
         match value {
             serde_json::Value::String(s) => {
-                let t = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S");
+                let t = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S");
 
                 if let Ok(t) = t {
                     return Self::Timestamp(t);
                 }
 
-                let value = chrono::DateTime::parse_from_rfc3339(&s);
+                let value = chrono::DateTime::parse_from_rfc3339(s);
 
                 if let Ok(value) = value {
                     return Self::TimestampTz(value.into());

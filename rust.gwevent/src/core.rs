@@ -87,22 +87,10 @@ pub fn get_event_guild_id(event: &FullEvent) -> Option<GuildId> {
         }
         FullEvent::InteractionCreate { ref interaction } => match interaction {
             Interaction::Ping(_) => return None,
-            Interaction::Command(command) => match command.guild_id {
-                Some(guild_id) => guild_id,
-                None => return None,
-            },
-            Interaction::Autocomplete(autocomplete) => match autocomplete.guild_id {
-                Some(guild_id) => guild_id,
-                None => return None,
-            },
-            Interaction::Component(component) => match component.guild_id {
-                Some(guild_id) => guild_id,
-                None => return None,
-            },
-            Interaction::Modal(component) => match component.guild_id {
-                Some(guild_id) => guild_id,
-                None => return None,
-            },
+            Interaction::Command(command) => command.guild_id?,
+            Interaction::Autocomplete(autocomplete) => autocomplete.guild_id?,
+            Interaction::Component(component) => component.guild_id?,
+            Interaction::Modal(component) => component.guild_id?,
             _ => return None,
         },
         FullEvent::InviteCreate { data, .. } => {

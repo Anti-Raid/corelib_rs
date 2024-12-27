@@ -119,5 +119,5 @@ pub async fn get_kittycat_perms(
         return Ok(vec!["global.*".into()]);
     }
 
-    Ok(rederive_perms(&mut *conn, guild_id, user_id, roles).await?)
+    rederive_perms(&mut *conn, guild_id, user_id, roles).await
 }

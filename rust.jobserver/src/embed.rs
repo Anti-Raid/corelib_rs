@@ -18,6 +18,12 @@ pub struct EmbedResponse<'a> {
     pub components: Vec<CreateActionRow<'a>>,
 }
 
+impl Default for EmbedResponse<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> EmbedResponse<'a> {
     pub fn new() -> Self {
         Self {

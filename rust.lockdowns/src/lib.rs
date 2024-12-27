@@ -387,13 +387,13 @@ impl Lockdown {
             for (channel_id, overwrites) in data.channel_permissions.iter() {
                 let done_roles = per_channel_done_roles
                     .entry(channel_id)
-                    .or_insert_with(|| std::collections::HashSet::new());
+                    .or_insert_with(std::collections::HashSet::new);
                 let done_users = per_channel_done_users
                     .entry(channel_id)
-                    .or_insert_with(|| std::collections::HashSet::new());
+                    .or_insert_with(std::collections::HashSet::new);
                 let channel_pos = new_channel_perms
                     .entry(*channel_id)
-                    .or_insert_with(|| Vec::new());
+                    .or_insert_with(Vec::new);
 
                 for overwrite in overwrites.iter() {
                     match overwrite.kind {
@@ -421,7 +421,7 @@ impl Lockdown {
         for data in lsd {
             for (role_id, perms) in data.role_permissions.iter() {
                 if !new_role_perms.contains_key(role_id) {
-                    new_role_perms.insert(*role_id, perms.clone());
+                    new_role_perms.insert(*role_id, *perms);
                 }
             }
         }
@@ -548,9 +548,9 @@ impl LockdownSet {
             .sort_by(|a, b| b.r#type.specificity().cmp(&a.r#type.specificity()));
     }
 
-    pub async fn get_handles<'a>(
+    pub async fn get_handles(
         &self,
-        lockdown_data: &LockdownData<'a>,
+        lockdown_data: &LockdownData<'_>,
         pg: &serenity::all::PartialGuild,
         pgc: &[serenity::all::GuildChannel],
     ) -> Result<LockdownModeHandles, silverpelt::Error> {
@@ -580,15 +580,15 @@ impl LockdownSet {
     }
 
     /// Helper method to apply a lockdown without needing to manually perform fetches
-    pub async fn easy_apply<'a>(
+    pub async fn easy_apply(
         &mut self,
         lockdown_type: Box<dyn LockdownMode>,
-        lockdown_data: &LockdownData<'a>,
+        lockdown_data: &LockdownData<'_>,
         reason: &str,
     ) -> Result<sqlx::types::Uuid, silverpelt::Error> {
         let mut pg = sandwich_driver::guild(
-            &lockdown_data.cache,
-            &lockdown_data.http,
+            lockdown_data.cache,
+            lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -596,8 +596,8 @@ impl LockdownSet {
         .map_err(|e| format!("Error while creating proxy guild: {}", e))?;
 
         let mut pgc = sandwich_driver::guild_channels(
-            &lockdown_data.cache,
-            &lockdown_data.http,
+            lockdown_data.cache,
+            lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -609,10 +609,10 @@ impl LockdownSet {
     }
 
     /// Adds a lockdown to the set returning the id of the created entry
-    pub async fn apply<'a>(
+    pub async fn apply(
         &mut self,
         lockdown_type: Box<dyn LockdownMode>,
-        lockdown_data: &LockdownData<'a>,
+        lockdown_data: &LockdownData<'_>,
         reason: &str,
         pg: &mut serenity::all::PartialGuild,
         pgc: &mut [serenity::all::GuildChannel],
@@ -676,14 +676,14 @@ impl LockdownSet {
     }
 
     /// Helper method to apply a lockdown without needing to manually perform fetches
-    pub async fn easy_remove<'a>(
+    pub async fn easy_remove(
         &mut self,
         id: sqlx::types::Uuid,
-        lockdown_data: &LockdownData<'a>,
+        lockdown_data: &LockdownData<'_>,
     ) -> Result<(), silverpelt::Error> {
         let mut pg = sandwich_driver::guild(
-            &lockdown_data.cache,
-            &lockdown_data.http,
+            lockdown_data.cache,
+            lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -691,8 +691,8 @@ impl LockdownSet {
         .map_err(|e| format!("Error while creating proxy guild: {}", e))?;
 
         let mut pgc = sandwich_driver::guild_channels(
-            &lockdown_data.cache,
-            &lockdown_data.http,
+            lockdown_data.cache,
+            lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
         )
@@ -703,10 +703,10 @@ impl LockdownSet {
     }
 
     /// Removes a lockdown from the set
-    pub async fn remove<'a>(
+    pub async fn remove(
         &mut self,
         id: sqlx::types::Uuid,
-        lockdown_data: &LockdownData<'a>,
+        lockdown_data: &LockdownData<'_>,
         pg: &mut serenity::all::PartialGuild,
         pgc: &mut [serenity::all::GuildChannel],
     ) -> Result<(), silverpelt::Error> {
@@ -766,9 +766,9 @@ impl LockdownSet {
     }
 
     /// Remove all lockdowns in order of specificity
-    pub async fn remove_all<'a>(
+    pub async fn remove_all(
         &mut self,
-        lockdown_data: &LockdownData<'a>,
+        lockdown_data: &LockdownData<'_>,
         pg: &mut serenity::all::PartialGuild,
         pgc: &mut [serenity::all::GuildChannel],
     ) -> Result<(), silverpelt::Error> {
@@ -999,7 +999,7 @@ pub mod qsl {
                     new_roles.push(
                         pg.id
                             .edit_role(
-                                &lockdown_data.http,
+                                lockdown_data.http,
                                 role.id,
                                 serenity::all::EditRole::new().permissions(*LOCKDOWN_PERMS),
                             )
@@ -1040,7 +1040,7 @@ pub mod qsl {
                     new_roles.push(
                         pg.id
                             .edit_role(
-                                &lockdown_data.http,
+                                lockdown_data.http,
                                 role.id,
                                 serenity::all::EditRole::new().permissions(perms),
                             )
@@ -1259,7 +1259,7 @@ pub mod tsl {
 
                 match channel
                     .edit(
-                        &lockdown_data.http,
+                        lockdown_data.http,
                         serenity::all::EditChannel::new().permissions(overwrites),
                     )
                     .await
@@ -1329,7 +1329,7 @@ pub mod tsl {
 
                 match channel
                     .edit(
-                        &lockdown_data.http,
+                        lockdown_data.http,
                         serenity::all::EditChannel::new().permissions(overwrites),
                     )
                     .await
@@ -1566,7 +1566,7 @@ pub mod scl {
 
             self.0
                 .edit(
-                    &lockdown_data.http,
+                    lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;
@@ -1595,7 +1595,7 @@ pub mod scl {
 
             self.0
                 .edit(
-                    &lockdown_data.http,
+                    lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;
@@ -1842,7 +1842,7 @@ pub mod role {
             // 1. Edit the role
             pg.id
                 .edit_role(
-                    &lockdown_data.http,
+                    lockdown_data.http,
                     self.0,
                     serenity::all::EditRole::new().permissions(serenity::all::Permissions::empty()),
                 )
@@ -1872,7 +1872,7 @@ pub mod role {
                 }
 
                 ch.edit(
-                    &lockdown_data.http,
+                    lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;
@@ -1903,7 +1903,7 @@ pub mod role {
             // First edit the role itself
             pg.id
                 .edit_role(
-                    &lockdown_data.http,
+                    lockdown_data.http,
                     self.0,
                     serenity::all::EditRole::new().permissions(rld.global_perms),
                 )
@@ -1939,7 +1939,7 @@ pub mod role {
                 }
 
                 ch.edit(
-                    &lockdown_data.http,
+                    lockdown_data.http,
                     serenity::all::EditChannel::new().permissions(overwrites),
                 )
                 .await?;

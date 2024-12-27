@@ -1,14 +1,6 @@
 use crate::data::Data;
-use std::sync::Arc;
 
 pub use typetag; // Re-exported
-
-pub struct EventHandlerContext {
-    pub guild_id: serenity::all::GuildId,
-    pub data: Arc<Data>,
-    pub event: AntiraidEvent,
-    pub serenity_context: serenity::all::Context,
-}
 
 /// This can be used to trigger a custom event
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -54,7 +46,7 @@ impl AntiraidEvent {
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,
-    ) -> Result<serde_json::Value, crate::Error> {
+    ) -> Result<(), crate::Error> {
         let url = format!(
             "http://{}:{}/dispatch-event/{}",
             config::CONFIG.base_ports.template_worker_addr,
@@ -65,7 +57,36 @@ impl AntiraidEvent {
         let resp = data.reqwest.post(&url).json(&self).send().await?;
 
         if resp.status().is_success() {
-            let json = resp.json::<serde_json::Value>().await?;
+            Ok(())
+        } else {
+            let err_text = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+
+            Err(err_text.into())
+        }
+    }
+
+    /// Dispatch the event to the template worker process
+    pub async fn dispatch_to_template_worker_and_wait(
+        &self,
+        data: &Data,
+        guild_id: serenity::all::GuildId,
+        wait_timeout: std::time::Duration,
+    ) -> Result<Vec<serde_json::Value>, crate::Error> {
+        let url = format!(
+            "http://{}:{}/dispatch-event/{}/@wait?wait_timeout={}",
+            config::CONFIG.base_ports.template_worker_addr,
+            config::CONFIG.base_ports.template_worker_port,
+            guild_id,
+            wait_timeout.as_millis()
+        );
+
+        let resp = data.reqwest.post(&url).json(&self).send().await?;
+
+        if resp.status().is_success() {
+            let json = resp.json::<Vec<serde_json::Value>>().await?;
 
             Ok(json)
         } else {
