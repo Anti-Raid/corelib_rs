@@ -73,7 +73,7 @@ impl Punishment {
     pub async fn dispatch_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
         crate::ar_event::AntiraidEvent::PunishmentCreate(self)
-            .dispatch_to_template_worker(&ctx.data::<crate::data::Data>(), guild_id)
+            .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
             .await?;
 
         Ok(())

@@ -42,7 +42,7 @@ pub enum AntiraidEvent {
 
 impl AntiraidEvent {
     /// Dispatch the event to the template worker process
-    pub async fn dispatch_to_template_worker(
+    pub async fn dispatch_to_template_worker_and_nowait(
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,
