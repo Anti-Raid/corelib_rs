@@ -15,11 +15,12 @@ dashmap = { version = "6", features = ["serde", "inline", "rayon"] }
 sqlx = { version = "0.8", features = [ "runtime-tokio-rustls", "postgres", "chrono", "uuid", "json"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "rustls-tls-native-roots"] }
 async-trait = "0.1.80"
-uuid = { version = "1", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v4"] }
 
 # Anti-Raid specific
 splashcore_rs = { path = "../rust.std" }
 config = { path = "../rust.config" }
+sandwich_driver = { path = "../rust.sandwich_driver" }
 
 [dependencies.serenity]
 git = "https://github.com/Anti-Raid/serenity"

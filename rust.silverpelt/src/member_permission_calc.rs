@@ -51,27 +51,6 @@ pub async fn get_user_positions_from_db(
 }
 
 /// Rederive permissions rederives the permissions given a member id and a list of roles
-pub fn rederive_perms_impl(
-    guild_id: GuildId,
-    user_id: UserId,
-    user_positions: Vec<kittycat::perms::PartialStaffPosition>,
-    perm_overrides: Vec<Permission>,
-) -> Vec<Permission> {
-    // We hardcode root users for the main server to ensure root users have control over the bot even under extreme circumstances
-    if guild_id == config::CONFIG.servers.main.get()
-        && config::CONFIG.discord_auth.root_users.contains(&user_id)
-    {
-        return vec!["global.*".into()];
-    }
-
-    kittycat::perms::StaffPermissions {
-        user_positions,
-        perm_overrides,
-    }
-    .resolve()
-}
-
-/// Rederive permissions rederives the permissions given a member id and a list of roles
 ///
 /// Calling rederive_perms_and_update_db has some side-effects. Use rederive_perms_impl if you do not want to update the database
 ///
@@ -82,7 +61,7 @@ async fn rederive_perms(
     guild_id: GuildId,
     user_id: UserId,
     roles: &[RoleId],
-) -> Result<Vec<Permission>, crate::Error> {
+) -> Result<kittycat::perms::StaffPermissions, crate::Error> {
     let perm_overrides = sqlx::query!(
         "SELECT perm_overrides FROM guild_members WHERE guild_id = $1 AND user_id = $2",
         guild_id.to_string(),
@@ -101,9 +80,10 @@ async fn rederive_perms(
     let roles_str = create_roles_list_for_guild(roles, guild_id);
     let user_positions = get_user_positions_from_db(&mut *conn, guild_id, &roles_str).await?;
 
-    let resolved_perms = rederive_perms_impl(guild_id, user_id, user_positions, perm_overrides);
-
-    Ok(resolved_perms)
+    Ok(kittycat::perms::StaffPermissions {
+        user_positions,
+        perm_overrides,
+    })
 }
 
 /// Returns the kittycat permissions of a user. This function also takes into account permission overrides etc.
@@ -113,10 +93,23 @@ pub async fn get_kittycat_perms(
     guild_owner_id: UserId,
     user_id: UserId,
     roles: &[RoleId],
-) -> Result<Vec<Permission>, crate::Error> {
+) -> Result<kittycat::perms::StaffPermissions, crate::Error> {
     // For now, owners have full permission, this may change in the future (maybe??)
     if guild_owner_id == user_id {
-        return Ok(vec!["global.*".into()]);
+        return Ok(kittycat::perms::StaffPermissions {
+            user_positions: Vec::new(),
+            perm_overrides: vec!["global.*".into()],
+        });
+    }
+
+    // We hardcode root users for the main server to ensure root users have control over the bot even under extreme circumstances
+    if guild_id == config::CONFIG.servers.main.get()
+        && config::CONFIG.discord_auth.root_users.contains(&user_id)
+    {
+        return Ok(kittycat::perms::StaffPermissions {
+            user_positions: Vec::new(),
+            perm_overrides: vec!["global.*".into()],
+        });
     }
 
     rederive_perms(&mut *conn, guild_id, user_id, roles).await

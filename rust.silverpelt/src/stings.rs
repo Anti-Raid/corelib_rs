@@ -28,8 +28,6 @@ pub struct Sting {
     pub duration: Option<std::time::Duration>,
     /// The data/metadata present within the sting, if any
     pub sting_data: Option<serde_json::Value>,
-    /// Is Handled
-    pub is_handled: bool,
     /// The handle log encountered while handling the sting
     pub handle_log: serde_json::Value,
 }
@@ -42,7 +40,7 @@ impl Sting {
         id: sqlx::types::Uuid,
     ) -> Result<Option<Sting>, crate::Error> {
         let rec = sqlx::query!(
-            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE id = $1 AND guild_id = $2",
+            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, handle_log FROM stings WHERE id = $1 AND guild_id = $2",
             id,
             guild_id.to_string(),
         )
@@ -66,7 +64,6 @@ impl Sting {
                     let secs = splashcore_rs::utils::pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
-                is_handled: row.is_handled,
                 handle_log: row.handle_log,
             })),
             None => Ok(None),
@@ -88,7 +85,7 @@ impl Sting {
         let page = std::cmp::max(page, 1) as i64; // Avoid negative pages
 
         let rec = sqlx::query!(
-            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE guild_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
+            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, handle_log FROM stings WHERE guild_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
             guild_id.to_string(),
             (page - 1) * PAGE_SIZE,
             PAGE_SIZE,
@@ -115,7 +112,6 @@ impl Sting {
                     let secs = splashcore_rs::utils::pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
-                is_handled: row.is_handled,
                 handle_log: row.handle_log,
             });
         }
@@ -125,7 +121,7 @@ impl Sting {
 
     pub async fn get_expired(db: impl sqlx::PgExecutor<'_>) -> Result<Vec<Sting>, crate::Error> {
         let rec = sqlx::query!(
-            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, is_handled, handle_log FROM stings WHERE duration IS NOT NULL AND is_handled = false AND (created_at + duration) < NOW()",
+            "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, handle_log FROM stings WHERE duration IS NOT NULL AND state = 'active' AND (created_at + duration) < NOW()",
         )
         .fetch_all(db)
         .await?;
@@ -149,7 +145,6 @@ impl Sting {
                     let secs = splashcore_rs::utils::pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
-                is_handled: row.is_handled,
                 handle_log: row.handle_log,
             });
         }
@@ -202,7 +197,7 @@ impl Sting {
         db: impl sqlx::PgExecutor<'_>,
     ) -> Result<(), crate::Error> {
         sqlx::query!(
-            "UPDATE stings SET src = $1, stings = $2, reason = $3, void_reason = $4, creator = $5, target = $6, state = $7, duration = make_interval(secs => $8), sting_data = $9, is_handled = $10, handle_log = $11 WHERE id = $12 AND guild_id = $13",
+            "UPDATE stings SET src = $1, stings = $2, reason = $3, void_reason = $4, creator = $5, target = $6, state = $7, duration = make_interval(secs => $8), sting_data = $9, handle_log = $10 WHERE id = $11 AND guild_id = $12",
             self.src,
             self.stings,
             self.reason,
@@ -212,7 +207,6 @@ impl Sting {
             self.state.to_string(),
             self.duration.map(|d| d.as_secs() as f64),
             self.sting_data,
-            self.is_handled,
             self.handle_log,
             self.id,
             self.guild_id.to_string(),
@@ -311,7 +305,6 @@ impl StingCreate {
             created_at,
             duration: self.duration,
             sting_data: self.sting_data,
-            is_handled: false,
             handle_log: serde_json::Value::Null,
         }
     }
@@ -531,7 +524,7 @@ pub async fn get_aggregate_stings_for_guild_user(
     target: serenity::all::UserId,
 ) -> Result<Vec<StingAggregate>, crate::Error> {
     let rec = sqlx::query!(
-        "SELECT COUNT(*) AS total_stings, src, target FROM stings WHERE guild_id = $1 AND (target = $2 OR target = 'system') GROUP BY src, target",
+        "SELECT COUNT(*) AS total_stings, src, target FROM stings WHERE guild_id = $1 AND state = 'active' AND (target = $2 OR target = 'system') GROUP BY src, target",
         guild_id.to_string(),
         StingTarget::User(target).to_string(),
     )
@@ -556,7 +549,7 @@ pub async fn get_aggregate_stings_for_guild(
     guild_id: serenity::all::GuildId,
 ) -> Result<Vec<StingAggregate>, crate::Error> {
     let rec = sqlx::query!(
-        "SELECT SUM(stings) AS total_stings, src, target FROM stings WHERE guild_id = $1 GROUP BY src, target",
+        "SELECT SUM(stings) AS total_stings, src, target FROM stings WHERE guild_id = $1 AND state = 'active' GROUP BY src, target",
         guild_id.to_string(),
     )
     .fetch_all(db)

@@ -7,8 +7,6 @@ use std::str::FromStr;
 pub struct Punishment {
     /// The ID of the applied punishment
     pub id: sqlx::types::Uuid,
-    /// The module name
-    pub module: String,
     /// Src of the sting, this can be useful if a module wants to store the source of the sting
     pub src: Option<String>,
     /// The guild id of the applied punishment
@@ -27,28 +25,30 @@ pub struct Punishment {
     pub duration: Option<std::time::Duration>,
     /// The reason for the punishment
     pub reason: String,
-    /// Is Handled
-    pub is_handled: bool,
+    /// The state of the sting
+    pub state: PunishmentState,
     /// Extra misc data
     pub data: Option<serde_json::Value>,
 }
 
 impl Punishment {
-    pub async fn get_expired(
+    /// Returns a punishment by ID
+    pub async fn get(
         db: impl sqlx::PgExecutor<'_>,
-    ) -> Result<Vec<Punishment>, crate::Error> {
+        guild_id: serenity::all::GuildId,
+        id: sqlx::types::Uuid,
+    ) -> Result<Option<Punishment>, crate::Error> {
         let rec = sqlx::query!(
-            "SELECT id, module, src, guild_id, punishment, creator, target, is_handled, handle_log, created_at, duration, reason, data FROM punishments WHERE duration IS NOT NULL AND is_handled = false AND (created_at + duration) < NOW()",
+            "SELECT id, src, guild_id, punishment, creator, target, state, handle_log, created_at, duration, reason, data FROM punishments WHERE id = $1 AND guild_id = $2",
+            id,
+            guild_id.to_string(),
         )
-        .fetch_all(db)
+        .fetch_optional(db)
         .await?;
 
-        let mut punishments = Vec::new();
-
-        for row in rec {
-            punishments.push(Punishment {
+        match rec {
+            Some(row) => Ok(Some(Punishment {
                 id: row.id,
-                module: row.module,
                 src: row.src,
                 guild_id: row.guild_id.parse()?,
                 punishment: row.punishment,
@@ -60,7 +60,82 @@ impl Punishment {
                     let secs = splashcore_rs::utils::pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
-                is_handled: row.is_handled,
+                state: PunishmentState::from_str(&row.state)?,
+                reason: row.reason,
+                data: row.data,
+            })),
+            None => Ok(None),
+        }
+    }
+
+    /// Lists punishments for a guild paginated based on page number
+    pub async fn list(
+        db: impl sqlx::PgExecutor<'_>,
+        guild_id: serenity::all::GuildId,
+        page: usize,
+    ) -> Result<Vec<Punishment>, crate::Error> {
+        const PAGE_SIZE: i64 = 20; // 20 punishments per page
+
+        let rec = sqlx::query!(
+            "SELECT id, src, guild_id, punishment, creator, target, state, handle_log, created_at, duration, reason, data FROM punishments WHERE guild_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
+            guild_id.to_string(),
+            (page as i64 - 1) * PAGE_SIZE,
+            PAGE_SIZE,
+        )
+        .fetch_all(db)
+        .await?;
+
+        let mut punishments = Vec::new();
+
+        for row in rec {
+            punishments.push(Punishment {
+                id: row.id,
+                src: row.src,
+                guild_id: row.guild_id.parse()?,
+                punishment: row.punishment,
+                creator: PunishmentTarget::from_str(&row.creator)?,
+                target: PunishmentTarget::from_str(&row.target)?,
+                handle_log: row.handle_log,
+                created_at: row.created_at,
+                duration: row.duration.map(|d| {
+                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    std::time::Duration::from_secs(secs.try_into().unwrap())
+                }),
+                state: PunishmentState::from_str(&row.state)?,
+                reason: row.reason,
+                data: row.data,
+            });
+        }
+
+        Ok(punishments)
+    }
+
+    pub async fn get_expired(
+        db: impl sqlx::PgExecutor<'_>,
+    ) -> Result<Vec<Punishment>, crate::Error> {
+        let rec = sqlx::query!(
+            "SELECT id, src, guild_id, punishment, creator, target, state, handle_log, created_at, duration, reason, data FROM punishments WHERE duration IS NOT NULL AND state = 'active' AND (created_at + duration) < NOW()",
+        )
+        .fetch_all(db)
+        .await?;
+
+        let mut punishments = Vec::new();
+
+        for row in rec {
+            punishments.push(Punishment {
+                id: row.id,
+                src: row.src,
+                guild_id: row.guild_id.parse()?,
+                punishment: row.punishment,
+                creator: PunishmentTarget::from_str(&row.creator)?,
+                target: PunishmentTarget::from_str(&row.target)?,
+                handle_log: row.handle_log,
+                created_at: row.created_at,
+                duration: row.duration.map(|d| {
+                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    std::time::Duration::from_secs(secs.try_into().unwrap())
+                }),
+                state: PunishmentState::from_str(&row.state)?,
                 reason: row.reason,
                 data: row.data,
             });
@@ -83,8 +158,6 @@ impl Punishment {
 /// Data required to create a punishment
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PunishmentCreate {
-    /// The module name
-    pub module: String,
     /// Src of the sting, this can be useful if a module wants to store the source of the sting
     pub src: Option<String>,
     /// The guild id of the applied punishment
@@ -101,6 +174,8 @@ pub struct PunishmentCreate {
     pub duration: Option<std::time::Duration>,
     /// The reason for the punishment
     pub reason: String,
+    /// The state of the punishment
+    pub state: PunishmentState,
     /// Extra misc data
     pub data: Option<serde_json::Value>,
 }
@@ -110,13 +185,10 @@ impl PunishmentCreate {
         self,
         id: sqlx::types::Uuid,
         created_at: chrono::DateTime<chrono::Utc>,
-        is_handled: bool,
     ) -> Punishment {
         Punishment {
             id,
             created_at,
-            is_handled,
-            module: self.module,
             src: self.src,
             guild_id: self.guild_id,
             punishment: self.punishment,
@@ -126,6 +198,7 @@ impl PunishmentCreate {
             duration: self.duration,
             reason: self.reason,
             data: self.data,
+            state: self.state,
         }
     }
 
@@ -136,10 +209,9 @@ impl PunishmentCreate {
     ) -> Result<Punishment, crate::Error> {
         let ret_data = sqlx::query!(
             r#"
-            INSERT INTO punishments (module, src, guild_id, punishment, creator, target, handle_log, duration, reason, data)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, make_interval(secs => $8), $9, $10) RETURNING id, created_at, is_handled
+            INSERT INTO punishments (src, guild_id, punishment, creator, target, handle_log, duration, reason, data, state)
+            VALUES ($1, $2, $3, $4, $5, $6, make_interval(secs => $7), $8, $9, $10) RETURNING id, created_at
             "#,
-            self.module,
             self.src,
             self.guild_id.to_string(),
             self.punishment,
@@ -148,12 +220,13 @@ impl PunishmentCreate {
             self.handle_log,
             self.duration.map(|d| d.as_secs() as f64),
             self.reason,
-            self.data
+            self.data,
+            self.state.to_string(),
         )
         .fetch_one(db)
         .await?;
 
-        Ok(self.to_punishment(ret_data.id, ret_data.created_at, ret_data.is_handled))
+        Ok(self.to_punishment(ret_data.id, ret_data.created_at))
     }
 
     /// Creates a new Punishment and dispatches it as an event in one go
@@ -238,5 +311,56 @@ impl<'de> Deserialize<'de> for PunishmentTarget {
     {
         let s = String::deserialize(deserializer)?;
         PunishmentTarget::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Hash, Default, Debug, Clone, Copy, PartialEq)]
+pub enum PunishmentState {
+    #[default]
+    Active,
+    Voided,
+    Handled,
+}
+
+impl std::fmt::Display for PunishmentState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PunishmentState::Active => write!(f, "active"),
+            PunishmentState::Voided => write!(f, "voided"),
+            PunishmentState::Handled => write!(f, "handled"),
+        }
+    }
+}
+
+impl std::str::FromStr for PunishmentState {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(PunishmentState::Active),
+            "voided" => Ok(PunishmentState::Voided),
+            "handled" => Ok(PunishmentState::Handled),
+            _ => Err(format!("Invalid punishment state: {}", s).into()),
+        }
+    }
+}
+
+// Serde impls for StingState
+impl Serialize for PunishmentState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_str(&format!("{}", self))
+    }
+}
+
+impl<'de> Deserialize<'de> for PunishmentState {
+    fn deserialize<D>(deserializer: D) -> Result<PunishmentState, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        PunishmentState::from_str(&s).map_err(serde::de::Error::custom)
     }
 }

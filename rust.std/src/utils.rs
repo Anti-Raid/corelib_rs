@@ -225,26 +225,7 @@ pub fn parse_numeric_list_to_str<T: std::fmt::Display + std::str::FromStr + Send
     s: &str,
     replace: &[(&'static str, &'static str)],
 ) -> Result<Vec<String>, T::Err> {
-    let mut list = Vec::new();
-    let mut number = String::new();
-
-    for c in s.chars() {
-        if c.is_numeric() {
-            number.push(c);
-        } else if !number.is_empty() {
-            for (from, to) in replace {
-                number = number.replace(from, to);
-            }
-            list.push(number.parse::<T>()?.to_string());
-            number.clear();
-        }
-    }
-
-    if !number.is_empty() {
-        list.push(number.parse::<T>()?.to_string());
-    }
-
-    Ok(list)
+    parse_numeric_list::<T>(s, replace).map(|v| v.into_iter().map(|v| v.to_string()).collect())
 }
 
 pub fn split_input_to_string(s: &str, separator: &str) -> Vec<String> {
