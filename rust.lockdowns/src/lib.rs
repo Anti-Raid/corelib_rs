@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use splashcore_rs::priorityset::PrioritySet;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 pub static CREATE_LOCKDOWN_MODES: LazyLock<DashMap<String, Box<dyn CreateLockdownMode>>> =
     LazyLock::new(|| {
@@ -78,7 +78,6 @@ pub struct LockdownData<'a> {
     pub http: &'a serenity::all::Http,
     pub pool: sqlx::PgPool,
     pub reqwest: reqwest::Client,
-    pub object_store: Arc<splashcore_rs::objectstore::ObjectStore>,
 }
 
 pub trait LockdownTestResult
