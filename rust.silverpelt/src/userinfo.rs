@@ -78,7 +78,7 @@ impl UserInfo {
             };
 
             let kittycat_staff_permissions = crate::member_permission_calc::get_kittycat_perms(
-                &mut *pool.acquire().await?,
+                pool,
                 guild_id,
                 guild_owner,
                 user_id,
@@ -108,7 +108,7 @@ impl UserInfo {
             let member = member.as_ref();
 
             let kittycat_staff_permissions = crate::member_permission_calc::get_kittycat_perms(
-                &mut *pool.acquire().await?,
+                pool,
                 guild_id,
                 guild.owner_id,
                 user_id,
@@ -149,7 +149,7 @@ impl UserInfo {
         };
 
         let kittycat_staff_permissions = crate::member_permission_calc::get_kittycat_perms(
-            &mut *pool.acquire().await?,
+            pool,
             guild_id,
             guild.owner_id,
             user_id,

@@ -20,7 +20,7 @@ pub fn create_roles_list_for_guild(roles: &[RoleId], guild_id: GuildId) -> Vec<S
 ///
 /// ``roles_str`` is the list of roles as strings. This can be obtained by calling ``create_roles_list_for_guild``
 pub async fn get_user_positions_from_db(
-    conn: &mut sqlx::PgConnection,
+    pool: &sqlx::PgPool,
     guild_id: GuildId,
     roles_str: &[String],
 ) -> Result<Vec<kittycat::perms::PartialStaffPosition>, crate::Error> {
@@ -30,7 +30,7 @@ pub async fn get_user_positions_from_db(
         guild_id.to_string(),
         &roles_str
     )
-    .fetch_all(&mut *conn)
+    .fetch_all(pool)
     .await?;
 
     let mut user_positions = Vec::new();
@@ -57,7 +57,7 @@ pub async fn get_user_positions_from_db(
 /// 0. The member will automatically be added to the guild_members table if they are not already in it
 /// 1. Resolved_perms_cache will be updated in the guild_members table
 async fn rederive_perms(
-    conn: &mut sqlx::PgConnection,
+    pool: &sqlx::PgPool,
     guild_id: GuildId,
     user_id: UserId,
     roles: &[RoleId],
@@ -67,7 +67,7 @@ async fn rederive_perms(
         guild_id.to_string(),
         user_id.to_string()
     )
-    .fetch_optional(&mut *conn)
+    .fetch_optional(pool)
     .await?
     .map(|x| {
         x.perm_overrides
@@ -78,7 +78,7 @@ async fn rederive_perms(
     .unwrap_or_default();
 
     let roles_str = create_roles_list_for_guild(roles, guild_id);
-    let user_positions = get_user_positions_from_db(&mut *conn, guild_id, &roles_str).await?;
+    let user_positions = get_user_positions_from_db(pool, guild_id, &roles_str).await?;
 
     Ok(kittycat::perms::StaffPermissions {
         user_positions,
@@ -88,7 +88,7 @@ async fn rederive_perms(
 
 /// Returns the kittycat permissions of a user. This function also takes into account permission overrides etc.
 pub async fn get_kittycat_perms(
-    conn: &mut sqlx::PgConnection,
+    pool: &sqlx::PgPool,
     guild_id: GuildId,
     guild_owner_id: UserId,
     user_id: UserId,
@@ -112,5 +112,5 @@ pub async fn get_kittycat_perms(
         });
     }
 
-    rederive_perms(&mut *conn, guild_id, user_id, roles).await
+    rederive_perms(pool, guild_id, user_id, roles).await
 }
