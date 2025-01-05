@@ -1,3 +1,11 @@
+pub struct NoMember {}
+
+impl AsRef<serenity::all::Member> for NoMember {
+    fn as_ref(&self) -> &serenity::all::Member {
+        unimplemented!()
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct UserInfo {
     pub discord_permissions: serenity::all::Permissions,
