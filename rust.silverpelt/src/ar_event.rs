@@ -1,14 +1,7 @@
 use crate::data::Data;
+use strum::{IntoStaticStr, VariantNames};
 
 pub use typetag; // Re-exported
-
-/// This can be used to trigger a custom event
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct CustomEvent {
-    pub event_name: String,
-    pub event_titlename: String,
-    pub event_data: serde_json::Value,
-}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct BuiltinCommandExecuteData {
@@ -67,7 +60,7 @@ pub struct ModerationEndEventData {
     pub correlation_id: sqlx::types::Uuid, // Will correlate with a ModerationStart's event data
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, IntoStaticStr, VariantNames)]
 #[must_use]
 pub enum AntiraidEvent {
     /// A sting create event. Dispatched when a sting is created
@@ -108,6 +101,54 @@ pub enum AntiraidEvent {
     ///
     /// Note that this event is not guaranteed to be fired (e.g. the action fails, jobserver timeout etc.)
     ModerationEnd(ModerationEndEventData),
+}
+
+impl std::fmt::Display for AntiraidEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s: &'static str = self.into();
+        write!(f, "{}", s)
+    }
+}
+
+impl AntiraidEvent {
+    /// Returns the variant names
+    pub fn variant_names() -> &'static [&'static str] {
+        Self::VARIANTS
+    }
+
+    /// Convert the event's inner data to a JSON value
+    pub fn to_value(&self) -> Result<serde_json::Value, serde_json::Error> {
+        match self {
+            AntiraidEvent::StingCreate(sting) => serde_json::to_value(sting),
+            AntiraidEvent::StingUpdate(sting) => serde_json::to_value(sting),
+            AntiraidEvent::StingExpire(sting) => serde_json::to_value(sting),
+            AntiraidEvent::StingDelete(sting) => serde_json::to_value(sting),
+            AntiraidEvent::PunishmentCreate(punishment) => serde_json::to_value(punishment),
+            AntiraidEvent::PunishmentExpire(punishment) => serde_json::to_value(punishment),
+            AntiraidEvent::OnStartup(templates) => serde_json::to_value(templates),
+            AntiraidEvent::BuiltinCommandExecute(data) => serde_json::to_value(data),
+            AntiraidEvent::PermissionCheckExecute(data) => serde_json::to_value(data),
+            AntiraidEvent::ModerationStart(data) => serde_json::to_value(data),
+            AntiraidEvent::ModerationEnd(data) => serde_json::to_value(data),
+        }
+    }
+
+    /// Returns the author of the event
+    pub fn author(&self) -> Option<String> {
+        match self {
+            AntiraidEvent::StingCreate(sting) => Some(sting.creator.to_string()),
+            AntiraidEvent::StingUpdate(sting) => Some(sting.creator.to_string()),
+            AntiraidEvent::StingExpire(sting) => Some(sting.creator.to_string()),
+            AntiraidEvent::StingDelete(sting) => Some(sting.creator.to_string()),
+            AntiraidEvent::PunishmentCreate(punishment) => Some(punishment.creator.to_string()),
+            AntiraidEvent::PunishmentExpire(punishment) => Some(punishment.creator.to_string()),
+            AntiraidEvent::OnStartup(_) => None,
+            AntiraidEvent::BuiltinCommandExecute(be) => Some(be.user_id.to_string()),
+            AntiraidEvent::PermissionCheckExecute(pce) => Some(pce.user_id.to_string()),
+            AntiraidEvent::ModerationStart(data) => Some(data.author.user.id.to_string()),
+            AntiraidEvent::ModerationEnd(_) => None,
+        }
+    }
 }
 
 impl AntiraidEvent {
