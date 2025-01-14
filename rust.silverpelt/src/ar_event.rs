@@ -1,4 +1,7 @@
 use crate::data::Data;
+use antiraid_types::punishments::Punishment;
+use antiraid_types::stings::Sting;
+use antiraid_types::userinfo::UserInfo;
 use strum::{IntoStaticStr, VariantNames};
 
 pub use typetag; // Re-exported
@@ -7,14 +10,14 @@ pub use typetag; // Re-exported
 pub struct BuiltinCommandExecuteData {
     pub command: String,
     pub user_id: serenity::all::UserId,
-    pub user_info: crate::userinfo::UserInfo,
+    pub user_info: UserInfo,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct PermissionCheckData {
     pub perm: kittycat::perms::Permission,
     pub user_id: serenity::all::UserId,
-    pub user_info: crate::userinfo::UserInfo,
+    pub user_info: UserInfo,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -64,22 +67,25 @@ pub struct ModerationEndEventData {
 #[must_use]
 pub enum AntiraidEvent {
     /// A sting create event. Dispatched when a sting is created
-    StingCreate(super::stings::Sting),
+    StingCreate(Sting),
 
     /// A sting update event. Dispatched when a sting is updated
-    StingUpdate(super::stings::Sting),
+    StingUpdate(Sting),
 
     /// A sting expiry event. Dispatched when a sting expires
-    StingExpire(super::stings::Sting),
+    StingExpire(Sting),
 
     /// A sting delete event. Dispatched when a sting is manually deleted
-    StingDelete(super::stings::Sting),
+    StingDelete(Sting),
 
     /// A punishment create event. Dispatched when a punishment is created
-    PunishmentCreate(super::punishments::Punishment),
+    PunishmentCreate(Punishment),
 
     /// A punishment expiration event. Dispatched when a punishment expires
-    PunishmentExpire(super::punishments::Punishment),
+    PunishmentExpire(Punishment),
+
+    /// A punishment delete event. Dispatched when a punishment is manually deleted
+    PunishmentDelete(Punishment),
 
     /// An on startup event is fired when a set of templates are modified
     ///
@@ -125,6 +131,7 @@ impl AntiraidEvent {
             AntiraidEvent::StingDelete(sting) => serde_json::to_value(sting),
             AntiraidEvent::PunishmentCreate(punishment) => serde_json::to_value(punishment),
             AntiraidEvent::PunishmentExpire(punishment) => serde_json::to_value(punishment),
+            AntiraidEvent::PunishmentDelete(punishment) => serde_json::to_value(punishment),
             AntiraidEvent::OnStartup(templates) => serde_json::to_value(templates),
             AntiraidEvent::BuiltinCommandExecute(data) => serde_json::to_value(data),
             AntiraidEvent::PermissionCheckExecute(data) => serde_json::to_value(data),
@@ -139,9 +146,10 @@ impl AntiraidEvent {
             AntiraidEvent::StingCreate(sting) => Some(sting.creator.to_string()),
             AntiraidEvent::StingUpdate(sting) => Some(sting.creator.to_string()),
             AntiraidEvent::StingExpire(sting) => Some(sting.creator.to_string()),
-            AntiraidEvent::StingDelete(sting) => Some(sting.creator.to_string()),
+            AntiraidEvent::StingDelete(sting) => Some(sting.creator.to_string()), // For now
             AntiraidEvent::PunishmentCreate(punishment) => Some(punishment.creator.to_string()),
             AntiraidEvent::PunishmentExpire(punishment) => Some(punishment.creator.to_string()),
+            AntiraidEvent::PunishmentDelete(punishment) => Some(punishment.creator.to_string()), // For now
             AntiraidEvent::OnStartup(_) => None,
             AntiraidEvent::BuiltinCommandExecute(be) => Some(be.user_id.to_string()),
             AntiraidEvent::PermissionCheckExecute(pce) => Some(pce.user_id.to_string()),

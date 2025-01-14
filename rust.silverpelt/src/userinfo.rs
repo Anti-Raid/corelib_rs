@@ -1,4 +1,4 @@
-use extract_map::ExtractMap;
+use antiraid_types::userinfo::UserInfo;
 
 pub struct NoMember {}
 
@@ -8,34 +8,22 @@ impl AsRef<serenity::all::Member> for NoMember {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct UserInfo {
-    pub discord_permissions: serenity::all::Permissions,
-    pub kittycat_staff_permissions: kittycat::perms::StaffPermissions,
-    pub kittycat_resolved_permissions: Vec<kittycat::perms::Permission>,
-    pub guild_owner_id: serenity::all::UserId,
-    pub guild_roles: ExtractMap<serenity::all::RoleId, serenity::all::Role>,
-    pub member_roles: Vec<serenity::all::RoleId>,
-}
-
-impl std::fmt::Debug for UserInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UserInfo")
-            .field("discord_permissions", &self.discord_permissions)
-            .field(
-                "kittycat_resolved_permissions",
-                &self.kittycat_resolved_permissions,
-            )
-            .field("guild_owner_id", &self.guild_owner_id)
-            .field("guild_roles", &self.guild_roles)
-            .field("member_roles", &self.member_roles)
-            .finish()
-    }
-}
-
-impl UserInfo {
+#[allow(async_fn_in_trait)]
+pub trait UserInfoOperations: Send + Sync {
     /// A simple, generic implementation to get UserInfo object
-    pub async fn get(
+    async fn get(
+        guild_id: serenity::all::GuildId,
+        user_id: serenity::all::UserId,
+        pool: &sqlx::PgPool,
+        serenity_context: &serenity::all::Context,
+        reqwest: &reqwest::Client,
+        member_opt: Option<impl AsRef<serenity::all::Member>>,
+    ) -> Result<UserInfo, crate::Error>;
+}
+
+impl UserInfoOperations for UserInfo {
+    /// A simple, generic implementation to get UserInfo object
+    async fn get(
         guild_id: serenity::all::GuildId,
         user_id: serenity::all::UserId,
         pool: &sqlx::PgPool,
