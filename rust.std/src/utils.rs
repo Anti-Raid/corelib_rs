@@ -241,47 +241,6 @@ pub fn split_input_to_string(s: &str, separator: &str) -> Vec<String> {
         .collect()
 }
 
-pub mod value_utils {
-    use crate::value::Value;
-
-    /// Given a template string, where state variables are surrounded by curly braces, return the
-    /// template value (if a single variable) or a string if not
-    pub fn template_to_string_map(
-        map: &indexmap::IndexMap<String, Value>,
-        template: &str,
-    ) -> Value {
-        let mut result = template.to_string();
-
-        // Get number of variables in the template
-        let num_starts = result.matches('{').count();
-
-        // If 1 variables, return the value of the variable
-        if num_starts == 1 && result.starts_with('{') && result.ends_with('}') {
-            let var = template
-                .chars()
-                .skip(1)
-                .take(template.len() - 2)
-                .collect::<String>();
-
-            return get_variable_value(map, &var);
-        }
-
-        for (key, value) in map {
-            result = result.replace(&format!("{{{}}}", key), &value.to_string());
-        }
-
-        Value::String(result)
-    }
-
-    pub fn get_variable_value(map: &indexmap::IndexMap<String, Value>, variable: &str) -> Value {
-        match variable {
-            "__now" => Value::TimestampTz(chrono::Utc::now()),
-            "__now_naive" => Value::Timestamp(chrono::Utc::now().naive_utc()),
-            _ => map.get(variable).cloned().unwrap_or(Value::None),
-        }
-    }
-}
-
 /// Returns a random string of length ``length``
 pub fn gen_random(length: usize) -> String {
     let s: String = rand::thread_rng()

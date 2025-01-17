@@ -362,15 +362,6 @@ pub struct Lockdown {
 }
 
 impl Lockdown {
-    pub fn to_map(&self) -> indexmap::IndexMap<String, splashcore_rs::value::Value> {
-        indexmap::indexmap! {
-            "id".to_string() => splashcore_rs::value::Value::Uuid(self.id),
-            "reason".to_string() => splashcore_rs::value::Value::String(self.reason.clone()),
-            "type".to_string() => splashcore_rs::value::Value::String(self.r#type.string_form()),
-            "data".to_string() => splashcore_rs::value::Value::from_json(&self.data),
-        }
-    }
-
     /// Merges a set of lockdown sharable data's assuming that least recent lockdowns are first
     fn merge_lsd(lsd: Vec<LockdownSharableData>) -> LockdownSharableData {
         let mut new_channel_perms = std::collections::HashMap::new();
