@@ -63,6 +63,20 @@ pub struct ModerationEndEventData {
     pub correlation_id: sqlx::types::Uuid, // Will correlate with a ModerationStart's event data
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum ExternalKeyUpdateEventDataAction {
+    Create,
+    Update,
+    Delete,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ExternalKeyUpdateEventData {
+    pub key_modified: String,
+    pub author: serenity::all::UserId,
+    pub action: ExternalKeyUpdateEventDataAction,
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, IntoStaticStr, VariantNames)]
 #[must_use]
 pub enum AntiraidEvent {
@@ -107,6 +121,9 @@ pub enum AntiraidEvent {
     ///
     /// Note that this event is not guaranteed to be fired (e.g. the action fails, jobserver timeout etc.)
     ModerationEnd(ModerationEndEventData),
+
+    /// A key external modify event. Fired when a key is modified externally
+    ExternalKeyUpdate(ExternalKeyUpdateEventData),
 }
 
 impl std::fmt::Display for AntiraidEvent {
@@ -137,6 +154,7 @@ impl AntiraidEvent {
             AntiraidEvent::PermissionCheckExecute(data) => serde_json::to_value(data),
             AntiraidEvent::ModerationStart(data) => serde_json::to_value(data),
             AntiraidEvent::ModerationEnd(data) => serde_json::to_value(data),
+            AntiraidEvent::ExternalKeyUpdate(data) => serde_json::to_value(data),
         }
     }
 
@@ -155,6 +173,7 @@ impl AntiraidEvent {
             AntiraidEvent::PermissionCheckExecute(pce) => Some(pce.user_id.to_string()),
             AntiraidEvent::ModerationStart(data) => Some(data.author.user.id.to_string()),
             AntiraidEvent::ModerationEnd(_) => None,
+            AntiraidEvent::ExternalKeyUpdate(data) => Some(data.author.to_string()),
         }
     }
 }
