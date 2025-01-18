@@ -226,6 +226,16 @@ impl AntiraidEvent {
         if resp.status().is_success() {
             let json = resp.json::<Vec<serde_json::Value>>().await?;
 
+            // Check for DispatchStop
+            for result in &json {
+                if let Some(value) = result.get("DispatchStop") {
+                    match value {
+                        serde_json::Value::String(s) => return Err(s.clone().into()),
+                        value => return Err(value.to_string().into()),
+                    }
+                }
+            }
+
             Ok(AntiraidEventResultHandle { results: json })
         } else {
             let err_text = resp
