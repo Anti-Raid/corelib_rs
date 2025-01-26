@@ -77,13 +77,29 @@ pub struct ExternalKeyUpdateEventData {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "op")]
+pub enum TemplateSettingExecuteEventDataAction {
+    View {
+        filters: indexmap::IndexMap<String, Value>,
+    },
+    Create {
+        fields: indexmap::IndexMap<String, Value>,
+    },
+    Update {
+        fields: indexmap::IndexMap<String, Value>,
+    },
+    Delete {
+        primary_key: Value,
+    },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct TemplateSettingExecuteEventData {
-    pub page_id: String,
+    pub template_id: String,
     pub setting_id: String,
     pub correlation_id: sqlx::types::Uuid, // A response from this must include a "correlation_id" field with this value so
-    pub action: ar_settings::types::OperationType,
+    pub action: TemplateSettingExecuteEventDataAction,
     pub author: serenity::all::UserId,
-    pub fields: indexmap::IndexMap<String, Value>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, IntoStaticStr, VariantNames)]
