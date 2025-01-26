@@ -290,7 +290,7 @@ pub fn get_event_user_id(event: &FullEvent) -> Option<UserId> {
                 return None;
             }
         }
-        FullEvent::InteractionCreate { .. } => return None, // We dont handle interactions create events in event handlers
+        FullEvent::InteractionCreate { .. } => return None, // Doesn't have a known user just from event
         FullEvent::InviteCreate { data, .. } => {
             if let Some(ref inviter) = data.inviter {
                 inviter.id.to_owned()

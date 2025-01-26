@@ -2,9 +2,8 @@ use crate::data::Data;
 use antiraid_types::punishments::Punishment;
 use antiraid_types::stings::Sting;
 use antiraid_types::userinfo::UserInfo;
+use serde_json::Value;
 use strum::{IntoStaticStr, VariantNames};
-
-pub use typetag; // Re-exported
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct BuiltinCommandExecuteData {
@@ -77,6 +76,16 @@ pub struct ExternalKeyUpdateEventData {
     pub action: ExternalKeyUpdateEventDataAction,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct TemplateSettingExecuteEventData {
+    pub page_id: String,
+    pub setting_id: String,
+    pub correlation_id: sqlx::types::Uuid, // A response from this must include a "correlation_id" field with this value so
+    pub action: ar_settings::types::OperationType,
+    pub author: serenity::all::UserId,
+    pub fields: indexmap::IndexMap<String, Value>,
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, IntoStaticStr, VariantNames)]
 #[must_use]
 pub enum AntiraidEvent {
@@ -124,6 +133,9 @@ pub enum AntiraidEvent {
 
     /// A key external modify event. Fired when a key is modified externally
     ExternalKeyUpdate(ExternalKeyUpdateEventData),
+
+    /// A template setting execute event. Fired when a template setting is executed
+    TemplateSettingExecute(TemplateSettingExecuteEventData),
 }
 
 impl std::fmt::Display for AntiraidEvent {
@@ -155,6 +167,7 @@ impl AntiraidEvent {
             AntiraidEvent::ModerationStart(data) => serde_json::to_value(data),
             AntiraidEvent::ModerationEnd(data) => serde_json::to_value(data),
             AntiraidEvent::ExternalKeyUpdate(data) => serde_json::to_value(data),
+            AntiraidEvent::TemplateSettingExecute(data) => serde_json::to_value(data),
         }
     }
 
@@ -174,6 +187,7 @@ impl AntiraidEvent {
             AntiraidEvent::ModerationStart(data) => Some(data.author.user.id.to_string()),
             AntiraidEvent::ModerationEnd(_) => None,
             AntiraidEvent::ExternalKeyUpdate(data) => Some(data.author.to_string()),
+            AntiraidEvent::TemplateSettingExecute(data) => Some(data.author.to_string()),
         }
     }
 }
