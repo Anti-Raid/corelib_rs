@@ -1,216 +1,27 @@
 use crate::data::Data;
-use antiraid_types::punishments::Punishment;
-use antiraid_types::stings::Sting;
-use antiraid_types::userinfo::UserInfo;
-use serde_json::Value;
-use strum::{IntoStaticStr, VariantNames};
+use antiraid_types::ar_event::AntiraidEvent;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct BuiltinCommandExecuteData {
-    pub command: String,
-    pub user_id: serenity::all::UserId,
-    pub user_info: UserInfo,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct PermissionCheckData {
-    pub perm: kittycat::perms::Permission,
-    pub user_id: serenity::all::UserId,
-    pub user_info: UserInfo,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "action")]
-pub enum ModerationAction {
-    Kick {
-        member: serenity::all::Member, // The target to kick
-    },
-    TempBan {
-        user: serenity::all::User, // The target to ban
-        duration: u64,             // Duration, in seconds
-        prune_dmd: u8,
-    },
-    Ban {
-        user: serenity::all::User, // The target to ban
-        prune_dmd: u8,
-    },
-    Unban {
-        user: serenity::all::User, // The target to unban
-    },
-    Timeout {
-        member: serenity::all::Member, // The target to timeout
-        duration: u64,                 // Duration, in seconds
-    },
-    Prune {
-        user: Option<serenity::all::User>,
-        prune_opts: serde_json::Value,
-        channels: Vec<serenity::all::ChannelId>,
-    },
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct ModerationStartEventData {
-    pub correlation_id: sqlx::types::Uuid, // This will also be sent on ModerationEndEventData to correlate the events while avoiding duplication of data
-    pub action: ModerationAction,
-    pub author: serenity::all::Member,
-    pub num_stings: i32,
-    pub reason: Option<String>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct ModerationEndEventData {
-    pub correlation_id: sqlx::types::Uuid, // Will correlate with a ModerationStart's event data
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum ExternalKeyUpdateEventDataAction {
-    Create,
-    Update,
-    Delete,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct ExternalKeyUpdateEventData {
-    pub key_modified: String,
-    pub author: serenity::all::UserId,
-    pub action: ExternalKeyUpdateEventDataAction,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "op")]
-pub enum TemplateSettingExecuteEventDataAction {
-    View {
-        filters: indexmap::IndexMap<String, Value>,
-    },
-    Create {
-        fields: indexmap::IndexMap<String, Value>,
-    },
-    Update {
-        fields: indexmap::IndexMap<String, Value>,
-    },
-    Delete {
-        primary_key: Value,
-    },
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct TemplateSettingExecuteEventData {
-    pub template_id: String,
-    pub setting_id: String,
-    pub correlation_id: sqlx::types::Uuid, // A response from this must include a "correlation_id" field with this value so
-    pub action: TemplateSettingExecuteEventDataAction,
-    pub author: serenity::all::UserId,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, IntoStaticStr, VariantNames)]
-#[must_use]
-pub enum AntiraidEvent {
-    /// A sting create event. Dispatched when a sting is created
-    StingCreate(Sting),
-
-    /// A sting update event. Dispatched when a sting is updated
-    StingUpdate(Sting),
-
-    /// A sting expiry event. Dispatched when a sting expires
-    StingExpire(Sting),
-
-    /// A sting delete event. Dispatched when a sting is manually deleted
-    StingDelete(Sting),
-
-    /// A punishment create event. Dispatched when a punishment is created
-    PunishmentCreate(Punishment),
-
-    /// A punishment expiration event. Dispatched when a punishment expires
-    PunishmentExpire(Punishment),
-
-    /// A punishment delete event. Dispatched when a punishment is manually deleted
-    PunishmentDelete(Punishment),
-
-    /// An on startup event is fired when a set of templates are modified
-    ///
-    /// The inner Vec<String> is the list of templates modified/reloaded
-    OnStartup(Vec<String>),
-
-    /// A builtin command execute event is fired when a core/builtin command is executed
-    ///
-    /// This contains three fields, the command name, the user id and the UserInfo
-    BuiltinCommandExecute(BuiltinCommandExecuteData),
-
-    /// A permission check event is fired when a permission check is done
-    PermissionCheckExecute(PermissionCheckData),
-
-    /// A moderation start event is fired prior to the execution of a moderation action
-    ModerationStart(ModerationStartEventData),
-
-    /// A moderation end event is fired after the execution of a moderation action
-    ///
-    /// Note that this event is not guaranteed to be fired (e.g. the action fails, jobserver timeout etc.)
-    ModerationEnd(ModerationEndEventData),
-
-    /// A key external modify event. Fired when a key is modified externally
-    ExternalKeyUpdate(ExternalKeyUpdateEventData),
-
-    /// A template setting execute event. Fired when a template setting is executed
-    TemplateSettingExecute(TemplateSettingExecuteEventData),
-}
-
-impl std::fmt::Display for AntiraidEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s: &'static str = self.into();
-        write!(f, "{}", s)
-    }
-}
-
-impl AntiraidEvent {
-    /// Returns the variant names
-    pub fn variant_names() -> &'static [&'static str] {
-        Self::VARIANTS
-    }
-
-    /// Convert the event's inner data to a JSON value
-    pub fn to_value(&self) -> Result<serde_json::Value, serde_json::Error> {
-        match self {
-            AntiraidEvent::StingCreate(sting) => serde_json::to_value(sting),
-            AntiraidEvent::StingUpdate(sting) => serde_json::to_value(sting),
-            AntiraidEvent::StingExpire(sting) => serde_json::to_value(sting),
-            AntiraidEvent::StingDelete(sting) => serde_json::to_value(sting),
-            AntiraidEvent::PunishmentCreate(punishment) => serde_json::to_value(punishment),
-            AntiraidEvent::PunishmentExpire(punishment) => serde_json::to_value(punishment),
-            AntiraidEvent::PunishmentDelete(punishment) => serde_json::to_value(punishment),
-            AntiraidEvent::OnStartup(templates) => serde_json::to_value(templates),
-            AntiraidEvent::BuiltinCommandExecute(data) => serde_json::to_value(data),
-            AntiraidEvent::PermissionCheckExecute(data) => serde_json::to_value(data),
-            AntiraidEvent::ModerationStart(data) => serde_json::to_value(data),
-            AntiraidEvent::ModerationEnd(data) => serde_json::to_value(data),
-            AntiraidEvent::ExternalKeyUpdate(data) => serde_json::to_value(data),
-            AntiraidEvent::TemplateSettingExecute(data) => serde_json::to_value(data),
-        }
-    }
-
-    /// Returns the author of the event
-    pub fn author(&self) -> Option<String> {
-        match self {
-            AntiraidEvent::StingCreate(sting) => Some(sting.creator.to_string()),
-            AntiraidEvent::StingUpdate(sting) => Some(sting.creator.to_string()),
-            AntiraidEvent::StingExpire(sting) => Some(sting.creator.to_string()),
-            AntiraidEvent::StingDelete(sting) => Some(sting.creator.to_string()), // For now
-            AntiraidEvent::PunishmentCreate(punishment) => Some(punishment.creator.to_string()),
-            AntiraidEvent::PunishmentExpire(punishment) => Some(punishment.creator.to_string()),
-            AntiraidEvent::PunishmentDelete(punishment) => Some(punishment.creator.to_string()), // For now
-            AntiraidEvent::OnStartup(_) => None,
-            AntiraidEvent::BuiltinCommandExecute(be) => Some(be.user_id.to_string()),
-            AntiraidEvent::PermissionCheckExecute(pce) => Some(pce.user_id.to_string()),
-            AntiraidEvent::ModerationStart(data) => Some(data.author.user.id.to_string()),
-            AntiraidEvent::ModerationEnd(_) => None,
-            AntiraidEvent::ExternalKeyUpdate(data) => Some(data.author.to_string()),
-            AntiraidEvent::TemplateSettingExecute(data) => Some(data.author.to_string()),
-        }
-    }
-}
-
-impl AntiraidEvent {
+#[allow(async_fn_in_trait)]
+pub trait AntiraidEventOperations {
     /// Dispatch the event to the template worker process
-    pub async fn dispatch_to_template_worker_and_nowait(
+    async fn dispatch_to_template_worker_and_nowait(
+        &self,
+        data: &Data,
+        guild_id: serenity::all::GuildId,
+    ) -> Result<(), crate::Error>;
+
+    /// Dispatch the event to the template worker process
+    async fn dispatch_to_template_worker_and_wait(
+        &self,
+        data: &Data,
+        guild_id: serenity::all::GuildId,
+        wait_timeout: std::time::Duration,
+    ) -> Result<AntiraidEventResultHandle, crate::Error>;
+}
+
+impl AntiraidEventOperations for AntiraidEvent {
+    /// Dispatch the event to the template worker process
+    async fn dispatch_to_template_worker_and_nowait(
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,
@@ -237,7 +48,7 @@ impl AntiraidEvent {
     }
 
     /// Dispatch the event to the template worker process
-    pub async fn dispatch_to_template_worker_and_wait(
+    async fn dispatch_to_template_worker_and_wait(
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,

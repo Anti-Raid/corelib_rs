@@ -3,6 +3,8 @@ use antiraid_types::punishments::{
 };
 use std::str::FromStr;
 
+use crate::ar_event::AntiraidEventOperations;
+
 #[allow(async_fn_in_trait)]
 pub trait PunishmentOperations: Send + Sync {
     /// Returns a punishment by ID
@@ -140,7 +142,7 @@ impl PunishmentOperations for Punishment {
     /// Dispatch a PunishmentCreate event
     async fn dispatch_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
-        crate::ar_event::AntiraidEvent::PunishmentCreate(self)
+        antiraid_types::ar_event::AntiraidEvent::PunishmentCreate(self)
             .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
             .await?;
 

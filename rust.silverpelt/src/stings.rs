@@ -1,6 +1,8 @@
 use antiraid_types::stings::{Sting, StingAggregate, StingCreate, StingState, StingTarget};
 use std::str::FromStr;
 
+use crate::ar_event::AntiraidEventOperations;
+
 #[allow(async_fn_in_trait)]
 pub trait StingOperations: Send + Sync {
     /// Returns a sting by ID
@@ -185,7 +187,7 @@ impl StingOperations for Sting {
     /// Dispatch a StingCreate event
     async fn dispatch_create_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
-        crate::ar_event::AntiraidEvent::StingCreate(self)
+        antiraid_types::ar_event::AntiraidEvent::StingCreate(self)
             .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
             .await?;
 
@@ -195,7 +197,7 @@ impl StingOperations for Sting {
     /// Dispatch a StingUpdate event
     async fn dispatch_update_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
-        crate::ar_event::AntiraidEvent::StingUpdate(self)
+        antiraid_types::ar_event::AntiraidEvent::StingUpdate(self)
             .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
             .await?;
 
@@ -205,7 +207,7 @@ impl StingOperations for Sting {
     /// Dispatch a StingDelete event
     async fn dispatch_delete_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
-        crate::ar_event::AntiraidEvent::StingDelete(self)
+        antiraid_types::ar_event::AntiraidEvent::StingDelete(self)
             .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
             .await?;
 
