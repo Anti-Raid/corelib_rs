@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::data::Data;
 use antiraid_types::ar_event::AntiraidEvent;
 
@@ -65,10 +67,10 @@ impl AntiraidEventOperations for AntiraidEvent {
         let resp = data.reqwest.post(&url).json(&self).send().await?;
 
         if resp.status().is_success() {
-            let json = resp.json::<Vec<serde_json::Value>>().await?;
+            let json = resp.json::<HashMap<String, serde_json::Value>>().await?;
 
             // Check for DispatchStop
-            for result in &json {
+            for result in json.values() {
                 if let Some(value) = result.get("DispatchStop") {
                     match value {
                         serde_json::Value::String(s) => return Err(s.clone().into()),
@@ -90,11 +92,11 @@ impl AntiraidEventOperations for AntiraidEvent {
 }
 
 pub struct AntiraidEventResultHandle {
-    pub results: Vec<serde_json::Value>,
+    pub results: HashMap<String, serde_json::Value>,
 }
 
 impl std::ops::Deref for AntiraidEventResultHandle {
-    type Target = Vec<serde_json::Value>;
+    type Target = HashMap<String, serde_json::Value>;
 
     fn deref(&self) -> &Self::Target {
         &self.results
@@ -108,7 +110,7 @@ impl AntiraidEventResultHandle {
     ///
     /// Note that this does not mean to deny the op (an error should be used for that)
     pub fn can_execute(&self) -> bool {
-        for result in &self.results {
+        for result in self.results.values() {
             if let Some(result) = result.get("allow_exec") {
                 if result.as_bool().unwrap_or_default() {
                     return true;
