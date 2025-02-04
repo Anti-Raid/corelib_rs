@@ -1,5 +1,4 @@
 pub mod objectstore;
-pub mod priorityset;
 pub mod serenity_backport;
 pub mod utils;
 
