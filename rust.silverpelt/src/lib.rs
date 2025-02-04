@@ -1,5 +1,6 @@
 pub mod ar_event;
 pub mod data;
+pub mod lockdowns;
 pub mod member_permission_calc;
 pub mod punishments;
 pub mod stings;
