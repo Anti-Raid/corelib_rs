@@ -24,7 +24,6 @@ ar_settings = { git = "https://github.com/Anti-Raid/settings" }
 
 # Anti-Raid specific
 splashcore_rs = { path = "../rust.std" }
-config = { path = "../rust.config" }
 sandwich_driver = { path = "../rust.sandwich_driver" }
 
 [dependencies.serenity]

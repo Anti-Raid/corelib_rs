@@ -7,7 +7,6 @@ edition = "2021"
 serde = "1.0"
 chrono = { version = "0.4", features = ["serde"]}
 serde_yaml = "0.9"
-rusty-s3 = "0.5"
 
 # Anti-Raid specific
 splashcore_rs = { path = "../rust.std" }

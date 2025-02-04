@@ -4,6 +4,10 @@ pub mod resp;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
+pub struct SandwichConfigData {
+    pub http_api: &'static str,
+}
+
 /// Checks if anti-raid is in a server or not
 /// Fetches a guild while handling all the pesky errors serenity normally has
 /// with caching
@@ -12,6 +16,7 @@ pub async fn has_guild(
     http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: serenity::all::GuildId,
+    config: &SandwichConfigData,
 ) -> Result<bool, Error> {
     if cache.guilds().contains(&guild_id) {
         return Ok(true);
@@ -27,8 +32,7 @@ pub async fn has_guild(
     // Check sandwich, it may be there
     let url = format!(
         "{}/antiraid/api/state?col=derived.has_guild_id&id={}",
-        config::CONFIG.meta.sandwich_http_api,
-        guild_id
+        config.http_api, guild_id
     );
 
     let resp = reqwest_client.get(&url).send().await?.json::<Resp>().await;
@@ -96,6 +100,7 @@ pub async fn guild(
     http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: serenity::model::id::GuildId,
+    config: &SandwichConfigData,
 ) -> Result<serenity::all::PartialGuild, Error> {
     // Check serenity cache
     {
@@ -116,8 +121,7 @@ pub async fn guild(
     // Check sandwich, it may be there
     let url = format!(
         "{}/antiraid/api/state?col=guilds&id={}",
-        config::CONFIG.meta.sandwich_http_api,
-        guild_id
+        config.http_api, guild_id
     );
 
     let resp = reqwest_client.get(&url).send().await?.json::<Resp>().await;
@@ -148,8 +152,7 @@ pub async fn guild(
     // Save to sandwich
     let url = format!(
         "{}/antiraid/api/state?col=guilds&id={}",
-        config::CONFIG.meta.sandwich_http_api,
-        guild_id
+        config.http_api, guild_id
     );
 
     let resp = reqwest_client.post(&url).json(&res).send().await?;
@@ -171,6 +174,7 @@ pub async fn member_in_guild(
     reqwest_client: &reqwest::Client,
     guild_id: serenity::model::id::GuildId,
     user_id: serenity::model::id::UserId,
+    config: &SandwichConfigData,
 ) -> Result<Option<serenity::all::Member>, Error> {
     // Check serenity cache
     if let Some(guild) = cache.guild(guild_id) {
@@ -182,9 +186,7 @@ pub async fn member_in_guild(
     // Part 2, try sandwich state
     let url = format!(
         "{}/antiraid/api/state?col=members&id={}&guild_id={}",
-        config::CONFIG.meta.sandwich_http_api,
-        user_id,
-        guild_id
+        config.http_api, user_id, guild_id
     );
 
     #[derive(serde::Serialize, serde::Deserialize)]
@@ -265,6 +267,7 @@ pub async fn guild_channels(
     http: &serenity::http::Http,
     reqwest_client: &reqwest::Client,
     guild_id: serenity::model::id::GuildId,
+    config: &SandwichConfigData,
 ) -> Result<Vec<serenity::all::GuildChannel>, Error> {
     // Try serenity cache first
     {
@@ -276,8 +279,7 @@ pub async fn guild_channels(
 
     let url = format!(
         "{}/antiraid/api/state?col=guild_channels&id={}",
-        config::CONFIG.meta.sandwich_http_api,
-        guild_id
+        config.http_api, guild_id
     );
 
     #[derive(serde::Serialize, serde::Deserialize)]
@@ -360,6 +362,7 @@ pub async fn channel(
     reqwest_client: &reqwest::Client,
     guild_id: Option<serenity::model::id::GuildId>,
     channel_id: serenity::model::id::ChannelId,
+    config: &SandwichConfigData,
 ) -> Result<Option<serenity::all::Channel>, Error> {
     // Try serenity cache first
     //
@@ -378,14 +381,11 @@ pub async fn channel(
     let url = match guild_id {
         Some(guild_id) => format!(
             "{}/antiraid/api/state?col=channels&id={}&guild_id={}",
-            config::CONFIG.meta.sandwich_http_api,
-            channel_id,
-            guild_id
+            config.http_api, channel_id, guild_id
         ),
         None => format!(
             "{}/antiraid/api/state?col=channels&id={}",
-            config::CONFIG.meta.sandwich_http_api,
-            channel_id
+            config.http_api, channel_id
         ),
     };
 
@@ -458,12 +458,12 @@ pub async fn channel(
     Ok(Some(channel))
 }
 
-pub async fn get_status(client: &reqwest::Client) -> Result<GetStatusResponse, Error> {
+pub async fn get_status(
+    client: &reqwest::Client,
+    config: &SandwichConfigData,
+) -> Result<GetStatusResponse, Error> {
     let res = client
-        .get(format!(
-            "{}/api/status",
-            config::CONFIG.meta.sandwich_http_api
-        ))
+        .get(format!("{}/api/status", config.http_api))
         .send()
         .await?
         .error_for_status()?

@@ -172,17 +172,6 @@ pub fn parse_duration_string(s: &str) -> Result<(u64, Unit), crate::Error> {
     Ok((number, unit))
 }
 
-/// Given a string of the format <number> days/hours/minutes/seconds, parse it into a chrono::Duration
-///
-/// This is a wrapper around parse_duration_string that converts the result into a chrono::Duration
-pub fn parse_duration_string_to_chrono_duration(s: &str) -> Result<chrono::Duration, crate::Error> {
-    let (number, unit) = parse_duration_string(s)?;
-
-    Ok(chrono::Duration::from_std(std::time::Duration::from_secs(
-        number * unit.to_seconds(),
-    ))?)
-}
-
 pub static REPLACE_CHANNEL: LazyLock<Vec<(&'static str, &'static str)>> =
     LazyLock::new(|| vec![("<#", ""), (">", "")]);
 
@@ -226,19 +215,6 @@ pub fn parse_numeric_list_to_str<T: std::fmt::Display + std::str::FromStr + Send
     replace: &[(&'static str, &'static str)],
 ) -> Result<Vec<String>, T::Err> {
     parse_numeric_list::<T>(s, replace).map(|v| v.into_iter().map(|v| v.to_string()).collect())
-}
-
-pub fn split_input_to_string(s: &str, separator: &str) -> Vec<String> {
-    s.split(separator)
-        .filter_map(|s| {
-            let s = s.trim();
-            if s.is_empty() {
-                None
-            } else {
-                Some(s.to_string())
-            }
-        })
-        .collect()
 }
 
 /// Returns a random string of length ``length``

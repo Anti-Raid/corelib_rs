@@ -48,32 +48,24 @@ impl ObjectStorage {
                 let secret_key = self.secret_key.as_ref().ok_or("Missing secret key")?;
                 let endpoint = self.endpoint.as_ref().ok_or("Missing endpoint")?;
 
-                let bucket = rusty_s3::Bucket::new(
-                    format!(
-                        "{}://{}",
-                        if self.secure.unwrap_or(false) {
-                            "https"
-                        } else {
-                            "http"
-                        },
-                        endpoint
-                    )
-                    .parse()
-                    .map_err(|e| format!("Failed to parse cdn endpoint: {}", e))?,
-                    rusty_s3::UrlStyle::Path,
-                    self.path.clone(),
-                    "us-east-1",
-                )?;
+                let endpoint_url = format!(
+                    "{}://{}",
+                    if self.secure.unwrap_or(false) {
+                        "https"
+                    } else {
+                        "http"
+                    },
+                    endpoint
+                );
 
-                let credentials = rusty_s3::Credentials::new(access_key, secret_key);
-                Ok(ObjectStore::S3 {
-                    credentials,
-                    bucket,
-                })
+                ObjectStore::new_s3(
+                    "antiraid.rust".to_string(),
+                    endpoint_url,
+                    access_key.to_string(),
+                    secret_key.to_string(),
+                )
             }
-            ObjectStorageType::Local => Ok(ObjectStore::Local {
-                prefix: self.path.clone(),
-            }),
+            ObjectStorageType::Local => Ok(ObjectStore::new_local(self.path.clone())),
         }
     }
 }

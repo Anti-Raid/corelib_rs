@@ -1,111 +1,224 @@
-use rusty_s3::S3Action;
+use dashmap::DashMap;
 
 const CHUNK_SIZE: usize = 5 * 1024 * 1024;
 const MULTIPART_MIN_SIZE: usize = 50 * 1024 * 1024;
-const MULTIPART_SIGN_DURATION: std::time::Duration = std::time::Duration::from_secs(30);
-const PUT_OBJECT_TIME: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Simple abstraction around object storages
 pub enum ObjectStore {
     S3 {
-        credentials: rusty_s3::Credentials,
-        bucket: rusty_s3::Bucket,
+        client: aws_sdk_s3::Client,
+        created_buckets: DashMap<String, ()>,
     },
     Local {
-        prefix: String,
+        dir: String,
     },
+}
+
+impl ObjectStore {
+    pub fn new_s3(
+        app_name: String,
+        endpoint: String,
+        key: String,
+        secret: String,
+    ) -> Result<Self, crate::Error> {
+        let client = aws_sdk_s3::Client::from_conf(
+            aws_sdk_s3::Config::builder()
+                .credentials_provider(aws_sdk_s3::config::Credentials::new(
+                    key.clone(),
+                    secret.clone(),
+                    None,
+                    None,
+                    "s3",
+                ))
+                .app_name(aws_sdk_s3::config::AppName::new(app_name)?)
+                .region(aws_sdk_s3::config::Region::new("us-east-1"))
+                .endpoint_url(endpoint.clone())
+                .force_path_style(true)
+                .behavior_version_latest()
+                .build(),
+        );
+
+        Ok(ObjectStore::S3 {
+            client,
+            created_buckets: DashMap::new(),
+        })
+    }
+
+    pub fn new_local(dir: String) -> Self {
+        ObjectStore::Local { dir }
+    }
 }
 
 pub struct ListObjectsResponse {
     pub key: String,
-    pub last_modified: chrono::DateTime<chrono::Utc>,
+    pub last_modified: Option<chrono::DateTime<chrono::Utc>>,
+    pub size: i64,
+    pub etag: Option<String>,
 }
 
 impl ObjectStore {
+    /// Create a bucket with the given name
+    pub async fn create_bucket(&self, name: &str) -> Result<(), crate::Error> {
+        match self {
+            ObjectStore::S3 {
+                client,
+                created_buckets,
+            } => {
+                client.create_bucket().bucket(name).send().await?;
+                created_buckets.insert(name.to_string(), ());
+                Ok(())
+            }
+            ObjectStore::Local { dir } => {
+                // Make directory <prefix>
+                std::fs::create_dir_all(format!("{}/{}", dir, name))
+                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+                Ok(())
+            }
+        }
+    }
+
+    /// Creates the bucket if it does not already exist
+    pub async fn create_bucket_if_not_exists(&self, name: &str) -> Result<(), crate::Error> {
+        match self {
+            ObjectStore::S3 {
+                client,
+                created_buckets,
+            } => {
+                if created_buckets.contains_key(name) {
+                    return Ok(());
+                }
+
+                let action = client
+                    .list_objects_v2()
+                    .bucket(name)
+                    .prefix(crate::utils::gen_random(16));
+
+                let must_create_bucket = match action.send().await {
+                    Ok(_) => false,
+                    Err(e) => {
+                        let Some(e) = e.as_service_error() else {
+                            return Err(format!("Failed to list objects: {}", e).into());
+                        };
+
+                        e.is_no_such_bucket()
+                    }
+                };
+
+                if must_create_bucket {
+                    self.create_bucket(name).await?;
+                }
+
+                Ok(())
+            }
+            ObjectStore::Local { dir } => {
+                // Make directory <prefix>
+                std::fs::create_dir_all(format!("{}/{}", dir, name))
+                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+                Ok(())
+            }
+        }
+    }
+
     /// Note that duration is only supported for S3
     ///
     /// On S3, this returns a presigned URL, on local, it returns a file:// url
-    pub fn get_url(&self, key: &str, duration: std::time::Duration) -> String {
+    pub async fn get_url(
+        &self,
+        bucket: &str,
+        key: &str,
+        duration: std::time::Duration,
+    ) -> Result<String, crate::Error> {
         match self {
-            ObjectStore::S3 {
-                credentials,
-                bucket,
-            } => {
-                let action = bucket.get_object(Some(credentials), key);
-                let url = action.sign(duration);
-                url.to_string()
+            ObjectStore::S3 { client, .. } => {
+                let url = client
+                    .get_object()
+                    .bucket(bucket)
+                    .key(key)
+                    .presigned(aws_sdk_s3::presigning::PresigningConfig::expires_in(
+                        duration,
+                    )?)
+                    .await?;
+
+                Ok(url.uri().to_string())
             }
-            ObjectStore::Local { prefix } => {
-                format!("file://{}/{}", prefix, key)
-            }
+            ObjectStore::Local { dir } => Ok(format!("file://{}/{}/{}", dir, bucket, key)),
         }
     }
 
     /// Lists all files in the object store with a given prefix
     pub async fn list_files(
         &self,
-        client: &reqwest::Client,
+        bucket: &str,
         key: Option<&str>,
     ) -> Result<Vec<ListObjectsResponse>, crate::Error> {
         match self {
-            ObjectStore::S3 {
-                credentials,
-                bucket,
-            } => {
+            ObjectStore::S3 { client, .. } => {
                 let mut continuation_token = None;
+                let mut have_created_bucket = false;
                 let mut resp = vec![];
 
                 loop {
-                    let mut action = bucket.list_objects_v2(Some(credentials));
+                    let mut action = client.list_objects_v2().bucket(bucket);
 
                     if let Some(key) = key {
-                        action.with_prefix(key);
+                        action = action.prefix(key);
                     }
 
                     if let Some(continuation_token) = &continuation_token {
-                        action.with_continuation_token(continuation_token);
+                        action = action.continuation_token(continuation_token);
                     }
 
-                    let url = action.sign(std::time::Duration::from_secs(30));
-                    let response = client
-                        .get(url)
-                        .send()
-                        .await
-                        .map_err(|e| format!("Failed to list objects: {}", e))?;
+                    let response = match action.send().await {
+                        Ok(response) => response,
+                        Err(e) => {
+                            let Some(e) = e.as_service_error() else {
+                                return Err(format!("Failed to list objects: {}", e).into());
+                            };
 
-                    if !response.status().is_success() {
-                        let text = response
-                            .text()
-                            .await
-                            .map_err(|e| format!("Failed to read response: {}", e))?;
-                        return Err(format!("Failed to list objects: {}", text).into());
+                            if e.is_no_such_bucket() && !have_created_bucket {
+                                // Try creating a new bucket
+                                self.create_bucket(bucket).await?;
+                                have_created_bucket = true;
+                                continue;
+                            } else {
+                                return Err(format!("Failed to list objects: {}", e).into());
+                            }
+                        }
+                    };
+
+                    if let Some(contents) = response.contents {
+                        for object in contents {
+                            let Some(ref key) = object.key else {
+                                continue;
+                            };
+
+                            resp.push(ListObjectsResponse {
+                                key: key.to_string(),
+                                last_modified: match object.last_modified {
+                                    Some(last_modified) => {
+                                        chrono::DateTime::from_timestamp(last_modified.secs(), 0)
+                                    }
+                                    None => None,
+                                },
+                                size: object.size.unwrap_or(0),
+                                etag: object.e_tag().map(|etag| etag.to_string()),
+                            });
+                        }
                     }
 
-                    let body = response
-                        .text()
-                        .await
-                        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-                    let list = rusty_s3::actions::ListObjectsV2::parse_response(&body)?;
-
-                    for object in list.contents {
-                        resp.push(ListObjectsResponse {
-                            key: object.key,
-                            last_modified: object.last_modified.parse()?,
-                        });
-                    }
-
-                    if list.next_continuation_token.is_none() {
+                    if response.next_continuation_token.is_none() {
                         break;
                     }
 
-                    continuation_token = list.next_continuation_token;
+                    continuation_token = response.next_continuation_token;
                 }
 
                 Ok(resp)
             }
-            ObjectStore::Local { prefix } => {
-                let mut path = std::path::Path::new(prefix).to_path_buf();
+            ObjectStore::Local { dir } => {
+                let mut path = std::path::Path::new(dir).join(bucket).to_path_buf();
 
                 if let Some(key) = key {
                     path = path.join(key);
@@ -124,12 +237,21 @@ impl ObjectStore {
                                 .ok_or("Failed to get file name")?
                                 .to_string_lossy()
                                 .to_string(),
-                            last_modified: entry
+                            last_modified: Some(
+                                entry
+                                    .metadata()
+                                    .map_err(|e| format!("Failed to get metadata: {}", e))?
+                                    .modified()
+                                    .map_err(|e| format!("Failed to get modified time: {}", e))?
+                                    .into(),
+                            ),
+                            size: entry
                                 .metadata()
                                 .map_err(|e| format!("Failed to get metadata: {}", e))?
-                                .modified()
-                                .map_err(|e| format!("Failed to get modified time: {}", e))?
-                                .into(),
+                                .len()
+                                .try_into()
+                                .unwrap_or(0),
+                            etag: None,
                         });
                     }
                 }
@@ -142,47 +264,42 @@ impl ObjectStore {
     /// Uploads a file to the object store with a given key
     pub async fn upload_file(
         &self,
-        client: &reqwest::Client,
+        bucket: &str,
         key: &str,
-        data: &[u8],
+        data: Vec<u8>,
     ) -> Result<(), crate::Error> {
+        self.create_bucket_if_not_exists(bucket).await?;
+
         match self {
-            ObjectStore::S3 {
-                credentials,
-                bucket,
-            } => {
+            ObjectStore::S3 { client, .. } => {
                 if data.len() > MULTIPART_MIN_SIZE {
-                    let action = bucket.create_multipart_upload(Some(credentials), key);
-                    let url = action.sign(MULTIPART_SIGN_DURATION);
-                    let response = client
-                        .post(url)
+                    let cmuo = client
+                        .create_multipart_upload()
+                        .bucket(bucket)
+                        .key(key)
                         .send()
-                        .await
-                        .map_err(|e| format!("Failed to create object: {}", e))?;
+                        .await?;
 
-                    if !response.status().is_success() {
-                        let text = response
-                            .text()
-                            .await
-                            .map_err(|e| format!("Failed to read response: {}", e))?;
-                        return Err(format!("Failed to create object: {}", text).into());
-                    }
-
-                    let body = response
-                        .text()
-                        .await
-                        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-                    let multipart =
-                        rusty_s3::actions::CreateMultipartUpload::parse_response(&body)?;
+                    let Some(upload_id) = cmuo.upload_id else {
+                        return Err("Failed to get upload id".into());
+                    };
 
                     // Upload parts
                     let mut error: Option<crate::Error> = None;
                     let mut parts = vec![];
                     loop {
-                        let action =
-                            bucket.upload_part(Some(credentials), key, 1, multipart.upload_id());
-                        let url = action.sign(MULTIPART_SIGN_DURATION);
+                        let mut action = client
+                            .upload_part()
+                            .bucket(bucket)
+                            .upload_id(upload_id.clone())
+                            .key(key)
+                            .part_number(match parts.len().try_into() {
+                                Ok(part_number) => part_number,
+                                Err(_) => {
+                                    error = Some("Failed to convert part number".into());
+                                    break;
+                                }
+                            });
 
                         // Split into 5 mb parts
                         let range = std::ops::Range {
@@ -192,59 +309,29 @@ impl ObjectStore {
 
                         let send_data = &data[range.start..range.end];
 
-                        let etag = {
-                            let response = match client
-                                .put(url)
-                                .body(send_data.to_vec())
-                                .send()
-                                .await
-                                .map_err(|e| format!("Failed to create object: {}", e))
-                            {
-                                Ok(response) => response,
-                                Err(e) => {
-                                    error = Some(e.into());
-                                    break;
-                                }
-                            };
+                        action = action.body(aws_smithy_types::byte_stream::ByteStream::from(
+                            send_data.to_vec(),
+                        ));
 
-                            if !response.status().is_success() {
-                                let text = match response
-                                    .text()
-                                    .await
-                                    .map_err(|e| format!("Failed to read response: {}", e))
-                                {
-                                    Ok(text) => text,
-                                    Err(e) => {
-                                        error = Some(e.into());
-                                        break;
-                                    }
-                                };
-
-                                error = Some(format!("Failed to create object: {}", text).into());
+                        let resp = match action.send().await {
+                            Ok(resp) => resp,
+                            Err(e) => {
+                                error = Some(format!("Failed to upload part: {}", e).into());
                                 break;
                             }
-
-                            let etag_header =
-                                match response.headers().get("ETag").ok_or("Missing ETag header") {
-                                    Ok(etag) => etag,
-                                    Err(e) => {
-                                        error = Some(e.into());
-                                        break;
-                                    }
-                                };
-
-                            let etag_str = match etag_header.to_str() {
-                                Ok(etag_str) => etag_str,
-                                Err(e) => {
-                                    error = Some(e.into());
-                                    break;
-                                }
-                            };
-
-                            etag_str.to_string()
                         };
 
-                        parts.push(etag);
+                        let Some(e_tag) = resp.e_tag else {
+                            error = Some("Failed to get e_tag".into());
+                            break;
+                        };
+
+                        parts.push(
+                            aws_sdk_s3::types::CompletedPart::builder()
+                                .e_tag(e_tag)
+                                .part_number(parts.len().try_into().unwrap())
+                                .build(),
+                        );
 
                         if range.end == data.len() {
                             break;
@@ -252,81 +339,46 @@ impl ObjectStore {
                     }
 
                     if let Some(error) = error {
-                        // Abort upload on error
-                        let action = bucket.abort_multipart_upload(
-                            Some(credentials),
-                            key,
-                            multipart.upload_id(),
-                        );
-
-                        let url = action.sign(std::time::Duration::from_secs(30));
-
                         client
-                            .delete(url)
+                            .abort_multipart_upload()
+                            .bucket(bucket)
+                            .key(key)
+                            .upload_id(upload_id)
                             .send()
-                            .await
-                            .map_err(|e| format!("Failed to abort upload: {}", e))?;
+                            .await?;
 
                         return Err(error);
                     }
 
-                    // Complete upload
-                    let mut parts_str: Vec<&str> = vec![];
+                    let completed_multipart_upload =
+                        aws_sdk_s3::types::CompletedMultipartUpload::builder()
+                            .set_parts(Some(parts))
+                            .build();
 
-                    for part in &parts {
-                        parts_str.push(part)
-                    }
-
-                    let action = bucket.complete_multipart_upload(
-                        Some(credentials),
-                        key,
-                        multipart.upload_id(),
-                        parts_str.into_iter(),
-                    );
-
-                    let url = action.sign(MULTIPART_SIGN_DURATION);
-
-                    let response = client
-                        .post(url)
-                        .body(action.body())
+                    client
+                        .complete_multipart_upload()
+                        .bucket(bucket)
+                        .key(key)
+                        .upload_id(upload_id)
+                        .multipart_upload(completed_multipart_upload)
                         .send()
-                        .await
-                        .map_err(|e| format!("Failed to complete upload: {}", e))?;
-
-                    if !response.status().is_success() {
-                        let text = response
-                            .text()
-                            .await
-                            .map_err(|e| format!("Failed to read response: {}", e))?;
-                        return Err(format!("Failed to complete upload: {}", text).into());
-                    }
+                        .await?;
 
                     Ok(())
                 } else {
-                    let action = bucket.put_object(Some(credentials), key);
-                    let url = action.sign(PUT_OBJECT_TIME);
-                    let response = client
-                        .put(url)
-                        .body(data.to_vec())
+                    client
+                        .put_object()
+                        .bucket(bucket)
+                        .key(key)
+                        .body(aws_smithy_types::byte_stream::ByteStream::from(data))
                         .send()
-                        .await
-                        .map_err(|e| format!("Failed to create object: {}", e))?;
-
-                    if !response.status().is_success() {
-                        let text = response
-                            .text()
-                            .await
-                            .map_err(|e| format!("Failed to read response: {}", e))?;
-                        return Err(format!("Failed to create object: {}", text).into());
-                    }
+                        .await?;
 
                     Ok(())
                 }
             }
-            ObjectStore::Local { prefix } => {
-                let path = std::path::Path::new(prefix).join(key);
-                std::fs::create_dir_all(path.parent().unwrap())
-                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+            ObjectStore::Local { dir } => {
+                let path = std::path::Path::new(dir).join(bucket).join(key);
                 std::fs::write(path, data).map_err(|e| format!("Failed to write object: {}", e))?;
 
                 Ok(())
@@ -334,36 +386,20 @@ impl ObjectStore {
         }
     }
 
-    pub async fn delete(&self, client: &reqwest::Client, key: &str) -> Result<(), crate::Error> {
+    pub async fn delete(&self, bucket: &str, key: &str) -> Result<(), crate::Error> {
         match self {
-            ObjectStore::S3 {
-                credentials,
-                bucket,
-            } => {
-                let mut action = bucket.delete_object(Some(credentials), key);
-                action
-                    .query_mut()
-                    .insert("response-cache-control", "no-cache, no-store");
-
-                let url = action.sign(std::time::Duration::from_secs(30));
-                let response = client
-                    .delete(url)
+            ObjectStore::S3 { client, .. } => {
+                client
+                    .delete_object()
+                    .bucket(bucket)
+                    .key(key)
                     .send()
-                    .await
-                    .map_err(|e| format!("Failed to delete object: {}", e))?;
-
-                if !response.status().is_success() {
-                    let text = response
-                        .text()
-                        .await
-                        .map_err(|e| format!("Failed to read response: {}", e))?;
-                    return Err(format!("Failed to delete object: {}", text).into());
-                }
+                    .await?;
 
                 Ok(())
             }
-            ObjectStore::Local { prefix } => {
-                let path = std::path::Path::new(prefix).join(key);
+            ObjectStore::Local { dir } => {
+                let path = std::path::Path::new(dir).join(bucket).join(key);
                 std::fs::remove_file(path)
                     .map_err(|e| format!("Failed to delete object: {}", e))?;
 

@@ -10,6 +10,7 @@ pub trait AntiraidEventOperations {
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error>;
 
     /// Dispatch the event to the template worker process
@@ -17,8 +18,14 @@ pub trait AntiraidEventOperations {
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,
+        dispatch_event_data: &DispatchEventData,
         wait_timeout: std::time::Duration,
     ) -> Result<AntiraidEventResultHandle, crate::Error>;
+}
+
+pub struct DispatchEventData {
+    pub template_worker_addr: &'static str,
+    pub template_worker_port: u16,
 }
 
 impl AntiraidEventOperations for AntiraidEvent {
@@ -27,11 +34,12 @@ impl AntiraidEventOperations for AntiraidEvent {
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
         let url = format!(
             "http://{}:{}/dispatch-event/{}",
-            config::CONFIG.base_ports.template_worker_addr,
-            config::CONFIG.base_ports.template_worker_port,
+            &dispatch_event_data.template_worker_addr,
+            dispatch_event_data.template_worker_port,
             guild_id
         );
 
@@ -54,12 +62,13 @@ impl AntiraidEventOperations for AntiraidEvent {
         &self,
         data: &Data,
         guild_id: serenity::all::GuildId,
+        dispatch_event_data: &DispatchEventData,
         wait_timeout: std::time::Duration,
     ) -> Result<AntiraidEventResultHandle, crate::Error> {
         let url = format!(
             "http://{}:{}/dispatch-event/{}/@wait?wait_timeout={}",
-            config::CONFIG.base_ports.template_worker_addr,
-            config::CONFIG.base_ports.template_worker_port,
+            &dispatch_event_data.template_worker_addr,
+            dispatch_event_data.template_worker_port,
             guild_id,
             wait_timeout.as_millis()
         );

@@ -267,13 +267,14 @@ impl Job {
             return Err("Job has no output".into());
         };
 
-        Ok(object_store.get_url(path, Duration::from_secs(600)))
+        object_store
+            .get_url("antiraid", path, Duration::from_secs(600))
+            .await
     }
 
     /// Deletes the job from the object storage
     pub async fn delete_from_storage(
         &self,
-        client: &reqwest::Client,
         object_store: &ObjectStore,
     ) -> Result<(), splashcore_rs::Error> {
         // Check if the job has an output
@@ -284,7 +285,7 @@ impl Job {
         };
 
         object_store
-            .delete(client, &format!("{}/{}", path, outp.filename))
+            .delete("antiraid", &format!("{}/{}", path, outp.filename))
             .await?;
 
         Ok(())
@@ -305,10 +306,9 @@ impl Job {
     pub async fn delete(
         self,
         pool: &PgPool,
-        client: &reqwest::Client,
         object_store: &ObjectStore,
     ) -> Result<(), splashcore_rs::Error> {
-        self.delete_from_storage(client, object_store).await?;
+        self.delete_from_storage(object_store).await?;
         self.delete_from_db(pool).await?;
 
         Ok(())

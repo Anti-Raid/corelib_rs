@@ -1,4 +1,7 @@
 use antiraid_types::userinfo::UserInfo;
+use sandwich_driver::SandwichConfigData;
+
+use crate::member_permission_calc::GetKittycatPermsConfigData;
 
 pub struct NoMember {}
 
@@ -10,6 +13,7 @@ impl AsRef<serenity::all::Member> for NoMember {
 
 #[allow(async_fn_in_trait)]
 pub trait UserInfoOperations: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
     /// A simple, generic implementation to get UserInfo object
     async fn get(
         guild_id: serenity::all::GuildId,
@@ -17,6 +21,8 @@ pub trait UserInfoOperations: Send + Sync {
         pool: &sqlx::PgPool,
         serenity_context: &serenity::all::Context,
         reqwest: &reqwest::Client,
+        config: GetKittycatPermsConfigData,
+        sandwich_config: &SandwichConfigData,
         member_opt: Option<impl AsRef<serenity::all::Member>>,
     ) -> Result<UserInfo, crate::Error>;
 }
@@ -29,6 +35,8 @@ impl UserInfoOperations for UserInfo {
         pool: &sqlx::PgPool,
         serenity_context: &serenity::all::Context,
         reqwest: &reqwest::Client,
+        config: GetKittycatPermsConfigData,
+        sandwich_config: &SandwichConfigData,
         // In some cases, we *do* have the member object, so we can pass it here
         member_opt: Option<impl AsRef<serenity::all::Member>>,
     ) -> Result<Self, crate::Error> {
@@ -66,6 +74,7 @@ impl UserInfoOperations for UserInfo {
                         reqwest,
                         guild_id,
                         user_id,
+                        sandwich_config,
                     )
                     .await?;
 
@@ -83,6 +92,7 @@ impl UserInfoOperations for UserInfo {
                 guild_owner,
                 user_id,
                 &member_roles,
+                config,
             )
             .await?;
 
@@ -114,6 +124,7 @@ impl UserInfoOperations for UserInfo {
                 guild.owner_id,
                 user_id,
                 &member.roles,
+                config,
             )
             .await?;
 
@@ -140,6 +151,7 @@ impl UserInfoOperations for UserInfo {
                 reqwest,
                 guild_id,
                 user_id,
+                sandwich_config,
             )
             .await?;
 
@@ -156,6 +168,7 @@ impl UserInfoOperations for UserInfo {
             guild.owner_id,
             user_id,
             &member.roles,
+            config,
         )
         .await?;
 

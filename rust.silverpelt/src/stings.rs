@@ -1,7 +1,7 @@
 use antiraid_types::stings::{Sting, StingAggregate, StingCreate, StingState, StingTarget};
 use std::str::FromStr;
 
-use crate::ar_event::AntiraidEventOperations;
+use crate::ar_event::{AntiraidEventOperations, DispatchEventData};
 
 #[allow(async_fn_in_trait)]
 pub trait StingOperations: Send + Sync {
@@ -23,13 +23,25 @@ pub trait StingOperations: Send + Sync {
     async fn get_expired(db: impl sqlx::PgExecutor<'_>) -> Result<Vec<Sting>, crate::Error>;
 
     /// Dispatch a StingCreate event
-    async fn dispatch_create_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error>;
+    async fn dispatch_create_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error>;
 
     /// Dispatch a StingUpdate event
-    async fn dispatch_update_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error>;
+    async fn dispatch_update_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error>;
 
     /// Dispatch a StingDelete event
-    async fn dispatch_delete_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error>;
+    async fn dispatch_delete_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error>;
 
     async fn guild_id(
         id: sqlx::types::Uuid,
@@ -47,6 +59,7 @@ pub trait StingOperations: Send + Sync {
         self,
         db: impl sqlx::PgExecutor<'_>,
         ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error>;
 
     /// Deletes a sting by ID
@@ -61,6 +74,7 @@ pub trait StingOperations: Send + Sync {
         self,
         db: impl sqlx::PgExecutor<'_>,
         ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error>;
 }
 
@@ -185,30 +199,54 @@ impl StingOperations for Sting {
     }
 
     /// Dispatch a StingCreate event
-    async fn dispatch_create_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
+    async fn dispatch_create_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
         antiraid_types::ar_event::AntiraidEvent::StingCreate(self)
-            .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
+            .dispatch_to_template_worker_and_nowait(
+                &ctx.data::<crate::data::Data>(),
+                guild_id,
+                dispatch_event_data,
+            )
             .await?;
 
         Ok(())
     }
 
     /// Dispatch a StingUpdate event
-    async fn dispatch_update_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
+    async fn dispatch_update_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
         antiraid_types::ar_event::AntiraidEvent::StingUpdate(self)
-            .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
+            .dispatch_to_template_worker_and_nowait(
+                &ctx.data::<crate::data::Data>(),
+                guild_id,
+                dispatch_event_data,
+            )
             .await?;
 
         Ok(())
     }
 
     /// Dispatch a StingDelete event
-    async fn dispatch_delete_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
+    async fn dispatch_delete_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
         antiraid_types::ar_event::AntiraidEvent::StingDelete(self)
-            .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
+            .dispatch_to_template_worker_and_nowait(
+                &ctx.data::<crate::data::Data>(),
+                guild_id,
+                dispatch_event_data,
+            )
             .await?;
 
         Ok(())
@@ -259,10 +297,11 @@ impl StingOperations for Sting {
         self,
         db: impl sqlx::PgExecutor<'_>,
         ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
         self.update_without_dispatch(db).await?;
 
-        self.dispatch_update_event(ctx).await?;
+        self.dispatch_update_event(ctx, dispatch_event_data).await?;
 
         Ok(())
     }
@@ -289,10 +328,11 @@ impl StingOperations for Sting {
         self,
         db: impl sqlx::PgExecutor<'_>,
         ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
         Self::delete_without_dispatch(db, self.guild_id, self.id).await?;
 
-        self.dispatch_delete_event(ctx).await?;
+        self.dispatch_delete_event(ctx, dispatch_event_data).await?;
 
         Ok(())
     }
@@ -311,6 +351,7 @@ pub trait StingCreateOperations: Send + Sync {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error>;
 
     /// Creates a new Sting and dispatches it as an event in one go
@@ -318,6 +359,7 @@ pub trait StingCreateOperations: Send + Sync {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<sqlx::types::Uuid, crate::Error>;
 }
 
@@ -354,10 +396,13 @@ impl StingCreateOperations for StingCreate {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
         let sting = self.create_without_dispatch(db).await?;
 
-        sting.dispatch_create_event(ctx).await?;
+        sting
+            .dispatch_create_event(ctx, dispatch_event_data)
+            .await?;
 
         Ok(())
     }
@@ -367,11 +412,14 @@ impl StingCreateOperations for StingCreate {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<sqlx::types::Uuid, crate::Error> {
         let sting = self.create_without_dispatch(db).await?;
         let sid = sting.id;
 
-        sting.dispatch_create_event(ctx).await?;
+        sting
+            .dispatch_create_event(ctx, dispatch_event_data)
+            .await?;
 
         Ok(sid)
     }

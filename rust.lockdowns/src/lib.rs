@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use dashmap::DashMap;
+use sandwich_driver::SandwichConfigData;
 use serde::{Deserialize, Serialize};
 use splashcore_rs::priorityset::PrioritySet;
 use std::collections::{HashMap, HashSet};
@@ -575,12 +576,14 @@ impl LockdownSet {
         lockdown_type: Box<dyn LockdownMode>,
         lockdown_data: &LockdownData<'_>,
         reason: &str,
+        sandwich_config: &SandwichConfigData,
     ) -> Result<sqlx::types::Uuid, silverpelt::Error> {
         let mut pg = sandwich_driver::guild(
             lockdown_data.cache,
             lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
+            sandwich_config,
         )
         .await
         .map_err(|e| format!("Error while creating proxy guild: {}", e))?;
@@ -590,6 +593,7 @@ impl LockdownSet {
             lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
+            sandwich_config,
         )
         .await
         .map_err(|e| format!("Error while fetching guild channels from proxy: {}", e))?;
@@ -670,12 +674,14 @@ impl LockdownSet {
         &mut self,
         id: sqlx::types::Uuid,
         lockdown_data: &LockdownData<'_>,
+        sandwich_config: &SandwichConfigData,
     ) -> Result<(), silverpelt::Error> {
         let mut pg = sandwich_driver::guild(
             lockdown_data.cache,
             lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
+            sandwich_config,
         )
         .await
         .map_err(|e| format!("Error while creating proxy guild: {}", e))?;
@@ -685,6 +691,7 @@ impl LockdownSet {
             lockdown_data.http,
             &lockdown_data.reqwest,
             self.guild_id,
+            sandwich_config,
         )
         .await
         .map_err(|e| format!("Error while fetching guild channels from proxy: {}", e))?;

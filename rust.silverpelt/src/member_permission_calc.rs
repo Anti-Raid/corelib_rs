@@ -86,6 +86,11 @@ async fn rederive_perms(
     })
 }
 
+pub struct GetKittycatPermsConfigData {
+    pub main_server_id: GuildId,
+    pub root_users: &'static [UserId],
+}
+
 /// Returns the kittycat permissions of a user. This function also takes into account permission overrides etc.
 pub async fn get_kittycat_perms(
     pool: &sqlx::PgPool,
@@ -93,6 +98,7 @@ pub async fn get_kittycat_perms(
     guild_owner_id: UserId,
     user_id: UserId,
     roles: &[RoleId],
+    config: GetKittycatPermsConfigData,
 ) -> Result<kittycat::perms::StaffPermissions, crate::Error> {
     // For now, owners have full permission, this may change in the future (maybe??)
     if guild_owner_id == user_id {
@@ -103,9 +109,7 @@ pub async fn get_kittycat_perms(
     }
 
     // We hardcode root users for the main server to ensure root users have control over the bot even under extreme circumstances
-    if guild_id == config::CONFIG.servers.main.get()
-        && config::CONFIG.discord_auth.root_users.contains(&user_id)
-    {
+    if guild_id == config.main_server_id && config.root_users.contains(&user_id) {
         return Ok(kittycat::perms::StaffPermissions {
             user_positions: Vec::new(),
             perm_overrides: vec!["global.*".into()],

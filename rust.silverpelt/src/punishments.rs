@@ -3,7 +3,7 @@ use antiraid_types::punishments::{
 };
 use std::str::FromStr;
 
-use crate::ar_event::AntiraidEventOperations;
+use crate::ar_event::{AntiraidEventOperations, DispatchEventData};
 
 #[allow(async_fn_in_trait)]
 pub trait PunishmentOperations: Send + Sync {
@@ -25,7 +25,11 @@ pub trait PunishmentOperations: Send + Sync {
     async fn get_expired(db: impl sqlx::PgExecutor<'_>) -> Result<Vec<Punishment>, crate::Error>;
 
     /// Dispatch a PunishmentCreate event
-    async fn dispatch_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error>;
+    async fn dispatch_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error>;
 }
 
 impl PunishmentOperations for Punishment {
@@ -140,10 +144,18 @@ impl PunishmentOperations for Punishment {
     }
 
     /// Dispatch a PunishmentCreate event
-    async fn dispatch_event(self, ctx: serenity::all::Context) -> Result<(), crate::Error> {
+    async fn dispatch_event(
+        self,
+        ctx: serenity::all::Context,
+        dispatch_event_data: &DispatchEventData,
+    ) -> Result<(), crate::Error> {
         let guild_id = self.guild_id;
         antiraid_types::ar_event::AntiraidEvent::PunishmentCreate(self)
-            .dispatch_to_template_worker_and_nowait(&ctx.data::<crate::data::Data>(), guild_id)
+            .dispatch_to_template_worker_and_nowait(
+                &ctx.data::<crate::data::Data>(),
+                guild_id,
+                dispatch_event_data,
+            )
             .await?;
 
         Ok(())
@@ -163,6 +175,7 @@ pub trait PunishmentCreateOperations: Send + Sync {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error>;
 
     /// Creates a new Punishment and dispatches it as an event in one go
@@ -170,6 +183,7 @@ pub trait PunishmentCreateOperations: Send + Sync {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<sqlx::types::Uuid, crate::Error>;
 }
 
@@ -206,10 +220,11 @@ impl PunishmentCreateOperations for PunishmentCreate {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
         let punishment = self.create_without_dispatch(db).await?;
 
-        punishment.dispatch_event(ctx).await?;
+        punishment.dispatch_event(ctx, dispatch_event_data).await?;
 
         Ok(())
     }
@@ -219,11 +234,12 @@ impl PunishmentCreateOperations for PunishmentCreate {
         self,
         ctx: serenity::all::Context,
         db: impl sqlx::PgExecutor<'_>,
+        dispatch_event_data: &DispatchEventData,
     ) -> Result<sqlx::types::Uuid, crate::Error> {
         let punishment = self.create_without_dispatch(db).await?;
         let sid = punishment.id;
 
-        punishment.dispatch_event(ctx).await?;
+        punishment.dispatch_event(ctx, dispatch_event_data).await?;
 
         Ok(sid)
     }
