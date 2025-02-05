@@ -1,4 +1,3 @@
-//use extract_map::ExtractMap;
 use extract_map::ExtractMap;
 use log::{error, warn};
 use serenity::all::{GuildId, Member, PartialGuild, Permissions, Role, RoleId, UserId};
