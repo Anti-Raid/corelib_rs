@@ -1,9 +1,11 @@
+use crate::Error;
+
 pub async fn spawn_task(
     reqwest_client: &reqwest::Client,
     spawn: &super::Spawn,
     jobserver_addr: &str,
     jobserver_port: u16,
-) -> Result<super::SpawnResponse, splashcore_rs::Error> {
+) -> Result<super::SpawnResponse, Error> {
     let resp = reqwest_client
         .post(format!("{}:{}/spawn", jobserver_addr, jobserver_port))
         .json(spawn)

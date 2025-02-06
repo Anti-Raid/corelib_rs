@@ -92,7 +92,7 @@ impl ObjectStore {
                 let action = client
                     .list_objects_v2()
                     .bucket(name)
-                    .prefix(splashcore_rs::utils::gen_random(16));
+                    .prefix(botox::crypto::gen_random(16));
 
                 let must_create_bucket = match action.send().await {
                     Ok(_) => false,

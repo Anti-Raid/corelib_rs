@@ -1,7 +1,10 @@
 use antiraid_types::stings::{Sting, StingAggregate, StingCreate, StingState, StingTarget};
 use std::str::FromStr;
 
-use crate::ar_event::{AntiraidEventOperations, DispatchEventData};
+use crate::{
+    ar_event::{AntiraidEventOperations, DispatchEventData},
+    pginterval::pg_interval_to_secs,
+};
 
 #[allow(async_fn_in_trait)]
 pub trait StingOperations: Send + Sync {
@@ -107,7 +110,7 @@ impl StingOperations for Sting {
                 sting_data: row.sting_data,
                 created_at: row.created_at,
                 duration: row.duration.map(|d| {
-                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    let secs = pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
                 handle_log: row.handle_log,
@@ -155,7 +158,7 @@ impl StingOperations for Sting {
                 sting_data: row.sting_data,
                 created_at: row.created_at,
                 duration: row.duration.map(|d| {
-                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    let secs = pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
                 handle_log: row.handle_log,
@@ -188,7 +191,7 @@ impl StingOperations for Sting {
                 sting_data: row.sting_data,
                 created_at: row.created_at,
                 duration: row.duration.map(|d| {
-                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    let secs = pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
                 handle_log: row.handle_log,

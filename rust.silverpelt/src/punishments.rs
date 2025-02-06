@@ -3,7 +3,10 @@ use antiraid_types::punishments::{
 };
 use std::str::FromStr;
 
-use crate::ar_event::{AntiraidEventOperations, DispatchEventData};
+use crate::{
+    ar_event::{AntiraidEventOperations, DispatchEventData},
+    pginterval::pg_interval_to_secs,
+};
 
 #[allow(async_fn_in_trait)]
 pub trait PunishmentOperations: Send + Sync {
@@ -58,7 +61,7 @@ impl PunishmentOperations for Punishment {
                 handle_log: row.handle_log,
                 created_at: row.created_at,
                 duration: row.duration.map(|d| {
-                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    let secs = pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
                 state: PunishmentState::from_str(&row.state)?,
@@ -99,7 +102,7 @@ impl PunishmentOperations for Punishment {
                 handle_log: row.handle_log,
                 created_at: row.created_at,
                 duration: row.duration.map(|d| {
-                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    let secs = pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
                 state: PunishmentState::from_str(&row.state)?,
@@ -131,7 +134,7 @@ impl PunishmentOperations for Punishment {
                 handle_log: row.handle_log,
                 created_at: row.created_at,
                 duration: row.duration.map(|d| {
-                    let secs = splashcore_rs::utils::pg_interval_to_secs(d);
+                    let secs = pg_interval_to_secs(d);
                     std::time::Duration::from_secs(secs.try_into().unwrap())
                 }),
                 state: PunishmentState::from_str(&row.state)?,

@@ -1,4 +1,4 @@
-use splashcore_rs::objectstore::ObjectStore;
+use crate::objectstore::ObjectStore;
 use std::fmt::Debug;
 use std::sync::Arc;
 
