@@ -25,7 +25,6 @@ aws-sdk-s3 = { version = "1" }
 aws-smithy-types = { version = "1" }
 
 # Anti-Raid specific
-splashcore_rs = { path = "../rust.std" }
 sandwich_driver = { path = "../rust.sandwich_driver" }
 
 [dependencies.serenity]

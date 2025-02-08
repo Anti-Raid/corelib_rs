@@ -97,7 +97,7 @@ impl UserInfoOperations for UserInfo {
             .await?;
 
             return Ok(Self {
-                discord_permissions: splashcore_rs::serenity_backport::user_permissions(
+                discord_permissions: botox::serenity_backports::user_permissions(
                     user_id,
                     &member_roles,
                     guild_id,
@@ -129,7 +129,7 @@ impl UserInfoOperations for UserInfo {
             .await?;
 
             return Ok(Self {
-                discord_permissions: splashcore_rs::serenity_backport::user_permissions(
+                discord_permissions: botox::serenity_backports::user_permissions(
                     member.user.id,
                     &member.roles,
                     guild.id,
@@ -173,7 +173,7 @@ impl UserInfoOperations for UserInfo {
         .await?;
 
         Ok(Self {
-            discord_permissions: splashcore_rs::serenity_backport::user_permissions(
+            discord_permissions: botox::serenity_backports::user_permissions(
                 member.user.id,
                 &member.roles,
                 guild.id,
