@@ -29,5 +29,6 @@ pub mod command_name_limits {
         "lockdowns",
         "moderation",
         "backups",
+        "settings",
     ];
 }
