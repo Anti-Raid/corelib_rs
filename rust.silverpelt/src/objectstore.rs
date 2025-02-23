@@ -89,10 +89,7 @@ impl ObjectStore {
                     return Ok(());
                 }
 
-                let action = client
-                    .list_objects_v2()
-                    .bucket(name)
-                    .prefix(botox::crypto::gen_random(16));
+                let action = client.head_bucket().bucket(name);
 
                 let must_create_bucket = match action.send().await {
                     Ok(_) => false,
@@ -101,7 +98,7 @@ impl ObjectStore {
                             return Err(format!("Failed to list objects: {}", e).into());
                         };
 
-                        e.is_no_such_bucket()
+                        e.is_not_found()
                     }
                 };
 
