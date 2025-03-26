@@ -2,6 +2,7 @@ use lockdowns::{
     from_lockdown_mode_string, CreateLockdown, GuildLockdownSettings, Lockdown, LockdownDataStore,
 };
 use sandwich_driver::SandwichConfigData;
+use sqlx::Row;
 
 pub struct LockdownData<'a> {
     pub cache: &'a serenity::all::Cache,
@@ -29,28 +30,37 @@ impl<'a> LockdownData<'a> {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct LockdownRow {
+    id: uuid::Uuid,
+    r#type: String,
+    data: serde_json::Value,
+    reason: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
 impl LockdownDataStore for LockdownData<'_> {
     async fn get_guild_lockdown_settings(
         &self,
         guild_id: serenity::all::GuildId,
     ) -> Result<lockdowns::GuildLockdownSettings, lockdowns::Error> {
-        match sqlx::query!(
+        match sqlx::query(
             "SELECT member_roles, require_correct_layout FROM lockdown__guilds WHERE guild_id = $1",
-            guild_id.to_string(),
         )
+        .bind(guild_id.to_string())
         .fetch_optional(&self.pool)
         .await?
         {
             Some(settings) => {
                 let member_roles = settings
-                    .member_roles
+                    .try_get::<Vec<String>, _>("member_roles")?
                     .iter()
                     .map(|r| r.parse().unwrap())
                     .collect();
 
                 let settings = GuildLockdownSettings {
                     member_roles,
-                    require_correct_layout: settings.require_correct_layout,
+                    require_correct_layout: settings.try_get("require_correct_layout")?,
                 };
 
                 Ok(settings)
@@ -99,10 +109,10 @@ impl LockdownDataStore for LockdownData<'_> {
         &self,
         guild_id: serenity::all::GuildId,
     ) -> Result<Vec<Lockdown>, lockdowns::Error> {
-        let data = sqlx::query!(
+        let data: Vec<LockdownRow> = sqlx::query_as(
             "SELECT id, type, data, reason, created_at FROM lockdown__guild_lockdowns WHERE guild_id = $1",
-            guild_id.to_string(),
         )
+        .bind(guild_id.to_string())
         .fetch_all(&self.pool)
         .await?;
 
@@ -136,22 +146,22 @@ impl LockdownDataStore for LockdownData<'_> {
         guild_id: serenity::all::GuildId,
         lockdown: CreateLockdown,
     ) -> Result<Lockdown, lockdowns::Error> {
-        let id = sqlx::query!(
+        let id = sqlx::query(
             "INSERT INTO lockdown__guild_lockdowns (guild_id, type, data, reason) VALUES ($1, $2, $3, $4) RETURNING id, created_at",
-            guild_id.to_string(),
-            lockdown.r#type.string_form(),
-            &lockdown.data,
-            lockdown.reason.clone(),
         )
+        .bind(guild_id.to_string())
+        .bind(lockdown.r#type.string_form())
+        .bind(&lockdown.data)
+        .bind(&lockdown.reason)
         .fetch_one(&self.pool)
         .await?;
 
         Ok(Lockdown {
-            id: id.id,
+            id: id.try_get("id")?,
             r#type: lockdown.r#type,
             data: lockdown.data,
             reason: lockdown.reason,
-            created_at: id.created_at,
+            created_at: id.try_get("created_at")?,
         })
     }
 
@@ -160,13 +170,11 @@ impl LockdownDataStore for LockdownData<'_> {
         guild_id: serenity::all::GuildId,
         id: uuid::Uuid,
     ) -> Result<(), lockdowns::Error> {
-        sqlx::query!(
-            "DELETE FROM lockdown__guild_lockdowns WHERE guild_id = $1 AND id = $2",
-            guild_id.to_string(),
-            id,
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("DELETE FROM lockdown__guild_lockdowns WHERE guild_id = $1 AND id = $2")
+            .bind(guild_id.to_string())
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }

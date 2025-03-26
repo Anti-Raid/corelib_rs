@@ -7,6 +7,7 @@ use crate::{
     ar_event::{AntiraidEventOperations, DispatchEventData},
     pginterval::pg_interval_to_secs,
 };
+use sqlx::{postgres::types::PgInterval, Row};
 
 #[allow(async_fn_in_trait)]
 pub trait PunishmentOperations: Send + Sync {
@@ -35,6 +36,44 @@ pub trait PunishmentOperations: Send + Sync {
     ) -> Result<(), crate::Error>;
 }
 
+#[derive(sqlx::FromRow)]
+struct PunishmentRow {
+    id: uuid::Uuid,
+    src: Option<String>,
+    guild_id: String,
+    punishment: String,
+    creator: String,
+    target: String,
+    state: String,
+    handle_log: serde_json::Value,
+    created_at: chrono::DateTime<chrono::Utc>,
+    duration: Option<PgInterval>,
+    reason: String,
+    data: Option<serde_json::Value>,
+}
+
+impl PunishmentRow {
+    fn into_punishment(self) -> Result<Punishment, crate::Error> {
+        Ok(Punishment {
+            id: self.id,
+            src: self.src,
+            guild_id: self.guild_id.parse()?,
+            punishment: self.punishment,
+            creator: PunishmentTarget::from_str(&self.creator)?,
+            target: PunishmentTarget::from_str(&self.target)?,
+            state: PunishmentState::from_str(&self.state)?,
+            handle_log: self.handle_log,
+            created_at: self.created_at,
+            duration: self.duration.map(|d| {
+                let secs = pg_interval_to_secs(d);
+                std::time::Duration::from_secs(secs.try_into().unwrap())
+            }),
+            reason: self.reason,
+            data: self.data,
+        })
+    }
+}
+
 impl PunishmentOperations for Punishment {
     /// Returns a punishment by ID
     async fn get(
@@ -42,32 +81,20 @@ impl PunishmentOperations for Punishment {
         guild_id: serenity::all::GuildId,
         id: sqlx::types::Uuid,
     ) -> Result<Option<Punishment>, crate::Error> {
-        let rec = sqlx::query!(
+        let rec = sqlx::query_as(
             "SELECT id, src, guild_id, punishment, creator, target, state, handle_log, created_at, duration, reason, data FROM punishments WHERE id = $1 AND guild_id = $2",
-            id,
-            guild_id.to_string(),
         )
+        .bind(id)
+        .bind(guild_id.to_string())
         .fetch_optional(db)
         .await?;
 
         match rec {
-            Some(row) => Ok(Some(Punishment {
-                id: row.id,
-                src: row.src,
-                guild_id: row.guild_id.parse()?,
-                punishment: row.punishment,
-                creator: PunishmentTarget::from_str(&row.creator)?,
-                target: PunishmentTarget::from_str(&row.target)?,
-                handle_log: row.handle_log,
-                created_at: row.created_at,
-                duration: row.duration.map(|d| {
-                    let secs = pg_interval_to_secs(d);
-                    std::time::Duration::from_secs(secs.try_into().unwrap())
-                }),
-                state: PunishmentState::from_str(&row.state)?,
-                reason: row.reason,
-                data: row.data,
-            })),
+            Some(row) => {
+                let row: PunishmentRow = row;
+                let punishment = row.into_punishment()?;
+                Ok(Some(punishment))
+            }
             None => Ok(None),
         }
     }
@@ -80,42 +107,27 @@ impl PunishmentOperations for Punishment {
     ) -> Result<Vec<Punishment>, crate::Error> {
         const PAGE_SIZE: i64 = 20; // 20 punishments per page
 
-        let rec = sqlx::query!(
+        let rec: Vec<PunishmentRow> = sqlx::query_as(
             "SELECT id, src, guild_id, punishment, creator, target, state, handle_log, created_at, duration, reason, data FROM punishments WHERE guild_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
-            guild_id.to_string(),
-            (page as i64 - 1) * PAGE_SIZE,
-            PAGE_SIZE,
         )
+        .bind(guild_id.to_string())
+        .bind((page as i64 - 1) * PAGE_SIZE)
+        .bind(PAGE_SIZE)
         .fetch_all(db)
         .await?;
 
         let mut punishments = Vec::new();
 
         for row in rec {
-            punishments.push(Punishment {
-                id: row.id,
-                src: row.src,
-                guild_id: row.guild_id.parse()?,
-                punishment: row.punishment,
-                creator: PunishmentTarget::from_str(&row.creator)?,
-                target: PunishmentTarget::from_str(&row.target)?,
-                handle_log: row.handle_log,
-                created_at: row.created_at,
-                duration: row.duration.map(|d| {
-                    let secs = pg_interval_to_secs(d);
-                    std::time::Duration::from_secs(secs.try_into().unwrap())
-                }),
-                state: PunishmentState::from_str(&row.state)?,
-                reason: row.reason,
-                data: row.data,
-            });
+            let punishment = row.into_punishment()?;
+            punishments.push(punishment);
         }
 
         Ok(punishments)
     }
 
     async fn get_expired(db: impl sqlx::PgExecutor<'_>) -> Result<Vec<Punishment>, crate::Error> {
-        let rec = sqlx::query!(
+        let rec: Vec<PunishmentRow> = sqlx::query_as(
             "SELECT id, src, guild_id, punishment, creator, target, state, handle_log, created_at, duration, reason, data FROM punishments WHERE duration IS NOT NULL AND state = 'active' AND (created_at + duration) < NOW()",
         )
         .fetch_all(db)
@@ -124,23 +136,8 @@ impl PunishmentOperations for Punishment {
         let mut punishments = Vec::new();
 
         for row in rec {
-            punishments.push(Punishment {
-                id: row.id,
-                src: row.src,
-                guild_id: row.guild_id.parse()?,
-                punishment: row.punishment,
-                creator: PunishmentTarget::from_str(&row.creator)?,
-                target: PunishmentTarget::from_str(&row.target)?,
-                handle_log: row.handle_log,
-                created_at: row.created_at,
-                duration: row.duration.map(|d| {
-                    let secs = pg_interval_to_secs(d);
-                    std::time::Duration::from_secs(secs.try_into().unwrap())
-                }),
-                state: PunishmentState::from_str(&row.state)?,
-                reason: row.reason,
-                data: row.data,
-            });
+            let punishment = row.into_punishment()?;
+            punishments.push(punishment);
         }
 
         Ok(punishments)
@@ -196,26 +193,26 @@ impl PunishmentCreateOperations for PunishmentCreate {
         self,
         db: impl sqlx::PgExecutor<'_>,
     ) -> Result<Punishment, crate::Error> {
-        let ret_data = sqlx::query!(
+        let ret_data = sqlx::query(
             r#"
             INSERT INTO punishments (src, guild_id, punishment, creator, target, handle_log, duration, reason, data, state)
             VALUES ($1, $2, $3, $4, $5, $6, make_interval(secs => $7), $8, $9, $10) RETURNING id, created_at
             "#,
-            self.src,
-            self.guild_id.to_string(),
-            self.punishment,
-            self.creator.to_string(),
-            self.target.to_string(),
-            self.handle_log,
-            self.duration.map(|d| d.as_secs() as f64),
-            self.reason,
-            self.data,
-            self.state.to_string(),
         )
+        .bind(&self.src)
+        .bind(self.guild_id.to_string())
+        .bind(&self.punishment)
+        .bind(self.creator.to_string())
+        .bind(self.target.to_string())
+        .bind(&self.handle_log)
+        .bind(self.duration.map(|d| d.as_secs() as f64))
+        .bind(&self.reason)
+        .bind(&self.data)
+        .bind(self.state.to_string())
         .fetch_one(db)
         .await?;
 
-        Ok(self.to_punishment(ret_data.id, ret_data.created_at))
+        Ok(self.to_punishment(ret_data.try_get("id")?, ret_data.try_get("created_at")?))
     }
 
     /// Creates a new Punishment and dispatches it as an event in one go

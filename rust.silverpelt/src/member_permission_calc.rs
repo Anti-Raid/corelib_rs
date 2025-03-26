@@ -1,5 +1,6 @@
 use kittycat::perms::Permission;
 use serenity::all::{GuildId, RoleId, UserId};
+use sqlx::Row;
 
 /// ``create_roles_list_for_guild`` creates a list of roles for a guild including the everyone role as a string
 ///
@@ -25,11 +26,11 @@ pub async fn get_user_positions_from_db(
     roles_str: &[String],
 ) -> Result<Vec<kittycat::perms::PartialStaffPosition>, crate::Error> {
     // Rederive permissions for the new perms
-    let role_perms = sqlx::query!(
+    let role_perms = sqlx::query(
         "SELECT role_id, perms, index FROM guild_roles WHERE guild_id = $1 AND role_id = ANY($2)",
-        guild_id.to_string(),
-        &roles_str
     )
+    .bind(guild_id.to_string())
+    .bind(roles_str)
     .fetch_all(pool)
     .await?;
 
@@ -37,13 +38,13 @@ pub async fn get_user_positions_from_db(
 
     for role in role_perms {
         user_positions.push(kittycat::perms::PartialStaffPosition {
-            id: role.role_id,
+            id: role.try_get("role_id")?,
             perms: role
-                .perms
+                .try_get::<Vec<String>, _>("perms")?
                 .iter()
                 .map(|x| Permission::from_string(x))
                 .collect(),
-            index: role.index,
+            index: role.try_get("index")?,
         })
     }
 
@@ -62,20 +63,21 @@ async fn rederive_perms(
     user_id: UserId,
     roles: &[RoleId],
 ) -> Result<kittycat::perms::StaffPermissions, crate::Error> {
-    let perm_overrides = sqlx::query!(
+    let perm_overrides = match sqlx::query(
         "SELECT perm_overrides FROM guild_members WHERE guild_id = $1 AND user_id = $2",
-        guild_id.to_string(),
-        user_id.to_string()
     )
+    .bind(guild_id.to_string())
+    .bind(user_id.to_string())
     .fetch_optional(pool)
     .await?
-    .map(|x| {
-        x.perm_overrides
+    {
+        Some(row) => row
+            .try_get::<Vec<String>, _>("perm_overrides")?
             .iter()
             .map(|x| Permission::from_string(x))
-            .collect::<Vec<_>>()
-    })
-    .unwrap_or_default();
+            .collect::<Vec<_>>(),
+        None => Vec::new(),
+    };
 
     let roles_str = create_roles_list_for_guild(roles, guild_id);
     let user_positions = get_user_positions_from_db(pool, guild_id, &roles_str).await?;

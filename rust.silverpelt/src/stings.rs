@@ -1,4 +1,5 @@
 use antiraid_types::stings::{Sting, StingAggregate, StingCreate, StingState, StingTarget};
+use sqlx::postgres::types::PgInterval;
 use std::str::FromStr;
 
 use crate::{
@@ -81,6 +82,49 @@ pub trait StingOperations: Send + Sync {
     ) -> Result<(), crate::Error>;
 }
 
+#[derive(sqlx::FromRow)]
+struct StingRow {
+    id: uuid::Uuid,
+    src: Option<String>,
+    stings: i32,
+    reason: Option<String>,
+    void_reason: Option<String>,
+    guild_id: String,
+    creator: String,
+    target: String,
+    state: String,
+    sting_data: Option<serde_json::Value>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    duration: Option<PgInterval>,
+    handle_log: serde_json::Value,
+}
+
+impl StingRow {
+    fn into_sting(self) -> Result<Sting, crate::Error> {
+        Ok(Sting {
+            id: self.id,
+            src: self.src,
+            stings: self.stings,
+            reason: self.reason,
+            void_reason: self.void_reason,
+            guild_id: self.guild_id.parse()?,
+            creator: StingTarget::from_str(&self.creator)?,
+            target: StingTarget::from_str(&self.target)?,
+            state: StingState::from_str(&self.state)?,
+            sting_data: self.sting_data,
+            created_at: self.created_at,
+            duration: match self.duration {
+                Some(d) => {
+                    let secs = pg_interval_to_secs(d);
+                    Some(std::time::Duration::from_secs(secs.try_into()?))
+                }
+                None => None,
+            },
+            handle_log: self.handle_log,
+        })
+    }
+}
+
 impl StingOperations for Sting {
     /// Returns a sting by ID
     async fn get(
@@ -88,33 +132,16 @@ impl StingOperations for Sting {
         guild_id: serenity::all::GuildId,
         id: sqlx::types::Uuid,
     ) -> Result<Option<Sting>, crate::Error> {
-        let rec = sqlx::query!(
+        let rec: Option<StingRow> = sqlx::query_as(
             "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, handle_log FROM stings WHERE id = $1 AND guild_id = $2",
-            id,
-            guild_id.to_string(),
         )
+        .bind(id)
+        .bind(guild_id.to_string())
         .fetch_optional(db)
         .await?;
 
         match rec {
-            Some(row) => Ok(Some(Sting {
-                id: row.id,
-                src: row.src,
-                stings: row.stings,
-                reason: row.reason,
-                void_reason: row.void_reason,
-                guild_id: row.guild_id.parse()?,
-                creator: StingTarget::from_str(&row.creator)?,
-                target: StingTarget::from_str(&row.target)?,
-                state: StingState::from_str(&row.state)?,
-                sting_data: row.sting_data,
-                created_at: row.created_at,
-                duration: row.duration.map(|d| {
-                    let secs = pg_interval_to_secs(d);
-                    std::time::Duration::from_secs(secs.try_into().unwrap())
-                }),
-                handle_log: row.handle_log,
-            })),
+            Some(row) => Ok(Some(row.into_sting()?)),
             None => Ok(None),
         }
     }
