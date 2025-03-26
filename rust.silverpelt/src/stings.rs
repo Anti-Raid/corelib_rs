@@ -1,5 +1,6 @@
 use antiraid_types::stings::{Sting, StingAggregate, StingCreate, StingState, StingTarget};
 use sqlx::postgres::types::PgInterval;
+use sqlx::Row;
 use std::str::FromStr;
 
 use crate::{
@@ -160,43 +161,26 @@ impl StingOperations for Sting {
 
         let page = std::cmp::max(page, 1) as i64; // Avoid negative pages
 
-        let rec = sqlx::query!(
+        let rec: Vec<StingRow> = sqlx::query_as(
             "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, handle_log FROM stings WHERE guild_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
-            guild_id.to_string(),
-            (page - 1) * PAGE_SIZE,
-            PAGE_SIZE,
         )
+        .bind(guild_id.to_string())
+        .bind((page - 1) * PAGE_SIZE)
+        .bind(PAGE_SIZE)
         .fetch_all(db)
         .await?;
 
         let mut stings = Vec::new();
 
         for row in rec {
-            stings.push(Sting {
-                id: row.id,
-                src: row.src,
-                stings: row.stings,
-                reason: row.reason,
-                void_reason: row.void_reason,
-                guild_id: row.guild_id.parse()?,
-                creator: StingTarget::from_str(&row.creator)?,
-                target: StingTarget::from_str(&row.target)?,
-                state: StingState::from_str(&row.state)?,
-                sting_data: row.sting_data,
-                created_at: row.created_at,
-                duration: row.duration.map(|d| {
-                    let secs = pg_interval_to_secs(d);
-                    std::time::Duration::from_secs(secs.try_into().unwrap())
-                }),
-                handle_log: row.handle_log,
-            });
+            stings.push(row.into_sting()?);
         }
 
         Ok(stings)
     }
 
     async fn get_expired(db: impl sqlx::PgExecutor<'_>) -> Result<Vec<Sting>, crate::Error> {
-        let rec = sqlx::query!(
+        let rec: Vec<StingRow> = sqlx::query_as(
             "SELECT id, src, stings, reason, void_reason, guild_id, creator, target, state, sting_data, created_at, duration, handle_log FROM stings WHERE duration IS NOT NULL AND state = 'active' AND (created_at + duration) < NOW()",
         )
         .fetch_all(db)
@@ -205,24 +189,7 @@ impl StingOperations for Sting {
         let mut stings = Vec::new();
 
         for row in rec {
-            stings.push(Sting {
-                id: row.id,
-                src: row.src,
-                stings: row.stings,
-                reason: row.reason,
-                void_reason: row.void_reason,
-                guild_id: row.guild_id.parse()?,
-                creator: StingTarget::from_str(&row.creator)?,
-                target: StingTarget::from_str(&row.target)?,
-                state: StingState::from_str(&row.state)?,
-                sting_data: row.sting_data,
-                created_at: row.created_at,
-                duration: row.duration.map(|d| {
-                    let secs = pg_interval_to_secs(d);
-                    std::time::Duration::from_secs(secs.try_into().unwrap())
-                }),
-                handle_log: row.handle_log,
-            });
+            stings.push(row.into_sting()?);
         }
 
         Ok(stings)
@@ -287,11 +254,12 @@ impl StingOperations for Sting {
         id: sqlx::types::Uuid,
         db: impl sqlx::PgExecutor<'_>,
     ) -> Result<serenity::all::GuildId, crate::Error> {
-        let guild_id = sqlx::query!("SELECT guild_id FROM stings WHERE id = $1", id)
+        let guild_id = sqlx::query("SELECT guild_id FROM stings WHERE id = $1")
+            .bind(id)
             .fetch_one(db)
             .await
             .map_err(|_| "Sting not found")?
-            .guild_id;
+            .try_get::<String, _>("guild_id")?;
 
         Ok(guild_id.parse()?)
     }
@@ -301,21 +269,21 @@ impl StingOperations for Sting {
         &self,
         db: impl sqlx::PgExecutor<'_>,
     ) -> Result<(), crate::Error> {
-        sqlx::query!(
+        sqlx::query(
             "UPDATE stings SET src = $1, stings = $2, reason = $3, void_reason = $4, creator = $5, target = $6, state = $7, duration = make_interval(secs => $8), sting_data = $9, handle_log = $10 WHERE id = $11 AND guild_id = $12",
-            self.src,
-            self.stings,
-            self.reason,
-            self.void_reason,
-            self.creator.to_string(),
-            self.target.to_string(),
-            self.state.to_string(),
-            self.duration.map(|d| d.as_secs() as f64),
-            self.sting_data,
-            self.handle_log,
-            self.id,
-            self.guild_id.to_string(),
         )
+        .bind(&self.src)
+        .bind(self.stings)
+        .bind(&self.reason)
+        .bind(&self.void_reason)
+        .bind(self.creator.to_string())
+        .bind(self.target.to_string())
+        .bind(self.state.to_string())
+        .bind(self.duration.map(|d| d.as_secs() as f64))
+        .bind(&self.sting_data)
+        .bind(&self.handle_log)
+        .bind(self.id)
+        .bind(self.guild_id.to_string())
         .execute(db)
         .await?;
 
@@ -342,13 +310,11 @@ impl StingOperations for Sting {
         guild_id: serenity::all::GuildId,
         id: sqlx::types::Uuid,
     ) -> Result<(), crate::Error> {
-        sqlx::query!(
-            "DELETE FROM stings WHERE id = $1 AND guild_id = $2",
-            id,
-            guild_id.to_string(),
-        )
-        .execute(db)
-        .await?;
+        sqlx::query("DELETE FROM stings WHERE id = $1 AND guild_id = $2")
+            .bind(id)
+            .bind(guild_id.to_string())
+            .execute(db)
+            .await?;
 
         Ok(())
     }
@@ -399,26 +365,26 @@ impl StingCreateOperations for StingCreate {
         self,
         db: impl sqlx::PgExecutor<'_>,
     ) -> Result<Sting, crate::Error> {
-        let ret_data = sqlx::query!(
+        let ret_data = sqlx::query(
             r#"
             INSERT INTO stings (src, stings, reason, void_reason, guild_id, target, creator, state, duration, sting_data)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9), $10) RETURNING id, created_at
             "#,
-            self.src,
-            self.stings,
-            self.reason,
-            self.void_reason,
-            self.guild_id.to_string(),
-            self.target.to_string(),
-            self.creator.to_string(),
-            self.state.to_string(),
-            self.duration.map(|d| d.as_secs() as f64),
-            self.sting_data,
         )
+        .bind(&self.src)
+        .bind(self.stings)
+        .bind(&self.reason)
+        .bind(&self.void_reason)
+        .bind(self.guild_id.to_string())
+        .bind(self.target.to_string())
+        .bind(self.creator.to_string())
+        .bind(self.state.to_string())
+        .bind(self.duration.map(|d| d.as_secs() as f64))
+        .bind(&self.sting_data)
         .fetch_one(db)
         .await?;
 
-        Ok(self.to_sting(ret_data.id, ret_data.created_at))
+        Ok(self.to_sting(ret_data.try_get("id")?, ret_data.try_get("created_at")?))
     }
 
     /// Creates a new Sting and dispatches it as an event in one go
@@ -455,6 +421,23 @@ impl StingCreateOperations for StingCreate {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct StingAggregateRow {
+    src: Option<String>,
+    target: String,
+    total_stings: Option<i64>,
+}
+
+impl StingAggregateRow {
+    fn into_sting_aggregate(self) -> Result<StingAggregate, crate::Error> {
+        Ok(StingAggregate {
+            src: self.src,
+            target: StingTarget::from_str(&self.target)?,
+            total_stings: self.total_stings.unwrap_or_default(),
+        })
+    }
+}
+
 #[allow(async_fn_in_trait)]
 pub trait StingAggregateOperations: Send + Sync {
     /// Returns a StingAggregate set for a user in a guild
@@ -477,22 +460,18 @@ impl StingAggregateOperations for StingAggregate {
         guild_id: serenity::all::GuildId,
         target: serenity::all::UserId,
     ) -> Result<Vec<StingAggregate>, crate::Error> {
-        let rec = sqlx::query!(
+        let rec: Vec<StingAggregateRow> = sqlx::query_as(
         "SELECT COUNT(*) AS total_stings, src, target FROM stings WHERE guild_id = $1 AND state = 'active' AND (target = $2 OR target = 'system') GROUP BY src, target",
-        guild_id.to_string(),
-        StingTarget::User(target).to_string(),
-    )
-    .fetch_all(db)
-    .await?;
+        )
+        .bind(guild_id.to_string())
+        .bind(StingTarget::User(target).to_string())
+        .fetch_all(db)
+        .await?;
 
         let mut stings = Vec::new();
 
         for row in rec {
-            stings.push(StingAggregate {
-                src: row.src,
-                target: StingTarget::from_str(&row.target)?,
-                total_stings: row.total_stings.unwrap_or_default(),
-            });
+            stings.push(row.into_sting_aggregate()?);
         }
 
         Ok(stings)
@@ -502,21 +481,17 @@ impl StingAggregateOperations for StingAggregate {
         db: impl sqlx::PgExecutor<'_>,
         guild_id: serenity::all::GuildId,
     ) -> Result<Vec<StingAggregate>, crate::Error> {
-        let rec = sqlx::query!(
+        let rec: Vec<StingAggregateRow> = sqlx::query_as(
         "SELECT SUM(stings) AS total_stings, src, target FROM stings WHERE guild_id = $1 AND state = 'active' GROUP BY src, target",
-        guild_id.to_string(),
-    )
-    .fetch_all(db)
-    .await?;
+        )
+        .bind(guild_id.to_string())
+        .fetch_all(db)
+        .await?;
 
         let mut stings = Vec::new();
 
         for row in rec {
-            stings.push(StingAggregate {
-                src: row.src,
-                target: StingTarget::from_str(&row.target)?,
-                total_stings: row.total_stings.unwrap_or_default(),
-            });
+            stings.push(row.into_sting_aggregate()?);
         }
 
         Ok(stings)
