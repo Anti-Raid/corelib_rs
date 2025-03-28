@@ -405,3 +405,8 @@ impl ObjectStore {
         }
     }
 }
+
+/// Returns the name of the bucket for the given guild
+pub fn guild_bucket(guild_id: serenity::all::GuildId) -> String {
+    format!("antiraid.guild.{}", guild_id)
+}

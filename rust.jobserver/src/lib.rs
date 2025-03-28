@@ -3,7 +3,7 @@ pub mod poll;
 pub mod spawn;
 
 use indexmap::IndexMap;
-use silverpelt::objectstore::ObjectStore;
+use silverpelt::objectstore::{guild_bucket, ObjectStore};
 use sqlx::postgres::types::PgInterval;
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -222,7 +222,7 @@ impl Job {
         };
 
         object_store
-            .get_url("antiraid", path, Duration::from_secs(600))
+            .get_url(&guild_bucket(self.guild_id), path, Duration::from_secs(600))
             .await
     }
 
@@ -236,7 +236,10 @@ impl Job {
         };
 
         object_store
-            .delete("antiraid", &format!("{}/{}", path, outp.filename))
+            .delete(
+                &guild_bucket(self.guild_id),
+                &format!("{}/{}", path, outp.filename),
+            )
             .await?;
 
         Ok(())
