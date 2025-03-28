@@ -83,6 +83,7 @@ impl From<String> for Owner {
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Output {
     pub filename: String,
+    pub perguild: Option<bool>, // Temp flag for migrations
 }
 
 /// JobCreateResponse is the response upon creation of a job
