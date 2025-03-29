@@ -64,10 +64,13 @@ impl PunishmentRow {
             state: PunishmentState::from_str(&self.state)?,
             handle_log: self.handle_log,
             created_at: self.created_at,
-            duration: self.duration.map(|d| {
-                let secs = pg_interval_to_secs(d);
-                std::time::Duration::from_secs(secs.try_into().unwrap())
-            }),
+            duration: match self.duration {
+                Some(d) => {
+                    let secs = pg_interval_to_secs(d);
+                    Some(std::time::Duration::from_secs(secs.try_into()?))
+                }
+                None => None,
+            },
             reason: self.reason,
             data: self.data,
         })

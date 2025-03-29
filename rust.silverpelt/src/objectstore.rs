@@ -326,7 +326,7 @@ impl ObjectStore {
                         parts.push(
                             aws_sdk_s3::types::CompletedPart::builder()
                                 .e_tag(e_tag)
-                                .part_number(parts.len().try_into().unwrap())
+                                .part_number(parts.len().try_into()?)
                                 .build(),
                         );
 

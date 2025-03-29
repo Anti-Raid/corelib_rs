@@ -82,7 +82,12 @@ pub async fn start_rpc_server(
 
             let _ = tokio::fs::remove_file(&path).await;
 
-            match tokio::fs::create_dir_all(path.parent().unwrap()).await {
+            match tokio::fs::create_dir_all(
+                path.parent()
+                    .expect("Failed to create parent unix socket path"),
+            )
+            .await
+            {
                 Ok(ok) => ok,
                 Err(err) => {
                     log::error!("failed to create parent directory: {err:#}");

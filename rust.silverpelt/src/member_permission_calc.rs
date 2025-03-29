@@ -54,9 +54,6 @@ pub async fn get_user_positions_from_db(
 /// Rederive permissions rederives the permissions given a member id and a list of roles
 ///
 /// Calling rederive_perms_and_update_db has some side-effects. Use rederive_perms_impl if you do not want to update the database
-///
-/// 0. The member will automatically be added to the guild_members table if they are not already in it
-/// 1. Resolved_perms_cache will be updated in the guild_members table
 async fn rederive_perms(
     pool: &sqlx::PgPool,
     guild_id: GuildId,

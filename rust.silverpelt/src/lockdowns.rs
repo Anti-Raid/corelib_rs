@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use lockdowns::{
     from_lockdown_mode_string, CreateLockdown, GuildLockdownSettings, Lockdown, LockdownDataStore,
 };
@@ -52,11 +54,16 @@ impl LockdownDataStore for LockdownData<'_> {
         .await?
         {
             Some(settings) => {
-                let member_roles = settings
-                    .try_get::<Vec<String>, _>("member_roles")?
-                    .iter()
-                    .map(|r| r.parse().unwrap())
-                    .collect();
+                let member_roles = {
+                    let member_roles_vec = settings.try_get::<Vec<String>, _>("member_roles")?;
+
+                    let mut member_roles = HashSet::with_capacity(member_roles_vec.len());
+                    for role in member_roles_vec {
+                        member_roles.insert(role.parse()?);
+                    }
+
+                    member_roles
+                };
 
                 let settings = GuildLockdownSettings {
                     member_roles,

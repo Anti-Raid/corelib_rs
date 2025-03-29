@@ -74,12 +74,6 @@ impl FromStr for Owner {
     }
 }
 
-impl From<String> for Owner {
-    fn from(s: String) -> Self {
-        Self::from_str(&s).unwrap()
-    }
-}
-
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Output {
     pub filename: String,
