@@ -59,7 +59,14 @@ impl LockdownDataStore for LockdownData<'_> {
 
                     let mut member_roles = HashSet::with_capacity(member_roles_vec.len());
                     for role in member_roles_vec {
-                        member_roles.insert(role.parse()?);
+                        if role.is_empty() {
+                            continue;
+                        }
+
+                        member_roles.insert(
+                            role.parse()
+                                .map_err(|_| format!("Failed to parse role ID: {}", role,))?,
+                        );
                     }
 
                     member_roles
