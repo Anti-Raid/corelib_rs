@@ -89,8 +89,8 @@ impl LockdownDataStore for LockdownData {
         guild_id: serenity::all::GuildId,
     ) -> Result<serenity::all::PartialGuild, lockdowns::Error> {
         sandwich_driver::guild(
-            self.cache,
-            self.http,
+            &self.cache,
+            &self.http,
             &self.reqwest,
             guild_id,
             &self.sandwich_config,
@@ -103,8 +103,8 @@ impl LockdownDataStore for LockdownData {
         guild_id: serenity::all::GuildId,
     ) -> Result<Vec<serenity::all::GuildChannel>, lockdowns::Error> {
         sandwich_driver::guild_channels(
-            self.cache,
-            self.http,
+            &self.cache,
+            &self.http,
             &self.reqwest,
             guild_id,
             &self.sandwich_config,
