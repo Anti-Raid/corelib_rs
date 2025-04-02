@@ -6,18 +6,18 @@ use lockdowns::{
 use sandwich_driver::SandwichConfigData;
 use sqlx::Row;
 
-pub struct LockdownData<'a> {
-    pub cache: &'a serenity::all::Cache,
-    pub http: &'a serenity::all::Http,
+pub struct LockdownData {
+    pub cache: Arc<serenity::all::Cache>,
+    pub http: Arc<serenity::all::Http>,
     pub pool: sqlx::PgPool,
     pub reqwest: reqwest::Client,
     pub sandwich_config: SandwichConfigData,
 }
 
-impl<'a> LockdownData<'a> {
+impl LockdownData {
     pub fn new(
-        cache: &'a serenity::all::Cache,
-        http: &'a serenity::all::Http,
+        cache: Arc<serenity::all::Cache>,
+        http: Arc<serenity::all::Http>,
         pool: sqlx::PgPool,
         reqwest: reqwest::Client,
         sandwich_config: SandwichConfigData,
@@ -112,11 +112,11 @@ impl LockdownDataStore for LockdownData<'_> {
     }
 
     fn cache(&self) -> Option<&serenity::all::Cache> {
-        Some(self.cache)
+        Some(self.cache.as_ref())
     }
 
     fn http(&self) -> &serenity::all::Http {
-        self.http
+        &self.http
     }
 
     async fn get_lockdowns(
