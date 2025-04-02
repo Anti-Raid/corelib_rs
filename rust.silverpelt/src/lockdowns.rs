@@ -7,6 +7,7 @@ use lockdowns::{
 use sandwich_driver::SandwichConfigData;
 use sqlx::Row;
 
+#[derive(Clone)]
 pub struct LockdownData {
     pub cache: Arc<serenity::all::Cache>,
     pub http: Arc<serenity::all::Http>,
