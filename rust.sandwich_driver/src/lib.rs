@@ -4,6 +4,7 @@ pub mod resp;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Clone, Copy)]
 pub struct SandwichConfigData {
     pub http_api: &'static str,
 }
