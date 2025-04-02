@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use lockdowns::{
     from_lockdown_mode_string, CreateLockdown, GuildLockdownSettings, Lockdown, LockdownDataStore,
@@ -41,7 +42,7 @@ struct LockdownRow {
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl LockdownDataStore for LockdownData<'_> {
+impl LockdownDataStore for LockdownData {
     async fn get_guild_lockdown_settings(
         &self,
         guild_id: serenity::all::GuildId,
