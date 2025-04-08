@@ -29,10 +29,10 @@ pub struct LuaKVConstraints {
 impl Default for LuaKVConstraints {
     fn default() -> Self {
         LuaKVConstraints {
-            max_keys: 2048,
-            max_key_length: 128,
-            // 50kb max per value
-            max_value_bytes: 50 * 1024,
+            max_keys: 10000,
+            max_key_length: 512,
+            // 256kb max per value
+            max_value_bytes: 256 * 1024,
         }
     }
 }
