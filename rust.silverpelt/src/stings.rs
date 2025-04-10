@@ -198,55 +198,28 @@ impl StingOperations for Sting {
     /// Dispatch a StingCreate event
     async fn dispatch_create_event(
         self,
-        ctx: serenity::all::Context,
-        dispatch_event_data: &DispatchEventData,
+        _ctx: serenity::all::Context,
+        _dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
-        let guild_id = self.guild_id;
-        antiraid_types::ar_event::AntiraidEvent::StingCreate(self)
-            .dispatch_to_template_worker_and_nowait(
-                &ctx.data::<crate::data::Data>(),
-                guild_id,
-                dispatch_event_data,
-            )
-            .await?;
-
-        Ok(())
+        Ok(()) // disabled as builtins+stings are being rewritten in luau
     }
 
     /// Dispatch a StingUpdate event
     async fn dispatch_update_event(
         self,
-        ctx: serenity::all::Context,
-        dispatch_event_data: &DispatchEventData,
+        _ctx: serenity::all::Context,
+        _dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
-        let guild_id = self.guild_id;
-        antiraid_types::ar_event::AntiraidEvent::StingUpdate(self)
-            .dispatch_to_template_worker_and_nowait(
-                &ctx.data::<crate::data::Data>(),
-                guild_id,
-                dispatch_event_data,
-            )
-            .await?;
-
-        Ok(())
+        Ok(()) // disabled as builtins+stings are being rewritten in luau
     }
 
     /// Dispatch a StingDelete event
     async fn dispatch_delete_event(
         self,
-        ctx: serenity::all::Context,
-        dispatch_event_data: &DispatchEventData,
+        _ctx: serenity::all::Context,
+        _dispatch_event_data: &DispatchEventData,
     ) -> Result<(), crate::Error> {
-        let guild_id = self.guild_id;
-        antiraid_types::ar_event::AntiraidEvent::StingDelete(self)
-            .dispatch_to_template_worker_and_nowait(
-                &ctx.data::<crate::data::Data>(),
-                guild_id,
-                dispatch_event_data,
-            )
-            .await?;
-
-        Ok(())
+        Ok(()) // disabled as builtins+stings are being rewritten in luau
     }
 
     /// Returns the guild ID associated with a sting
