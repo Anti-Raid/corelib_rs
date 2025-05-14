@@ -118,6 +118,34 @@ impl ObjectStore {
         }
     }
 
+    /// Returns if a file exists in the object store
+    pub async fn exists(&self, bucket: &str, key: &str) -> Result<bool, crate::Error> {
+        match self {
+            ObjectStore::S3 { client, .. } => {
+                let action = client.head_object().bucket(bucket).key(key);
+
+                match action.send().await {
+                    Ok(_) => Ok(true),
+                    Err(e) => {
+                        let Some(e) = e.as_service_error() else {
+                            return Err(format!("Failed to list objects: {}", e).into());
+                        };
+
+                        if e.is_not_found() {
+                            Ok(false)
+                        } else {
+                            Err(format!("Failed to list objects: {}", e).into())
+                        }
+                    }
+                }
+            }
+            ObjectStore::Local { dir } => {
+                let path = std::path::Path::new(dir).join(bucket).join(key);
+                Ok(path.exists())
+            }
+        }
+    }
+
     /// Note that duration is only supported for S3
     ///
     /// On S3, this returns a presigned URL, on local, it returns a file:// url
@@ -254,6 +282,32 @@ impl ObjectStore {
                 }
 
                 Ok(files)
+            }
+        }
+    }
+
+    /// Downloads a file from the object store with a given key
+    pub async fn download_file(
+        &self,
+        bucket: &str,
+        key: &str,
+    ) -> Result<Vec<u8>, crate::Error> {
+        match self {
+            ObjectStore::S3 { client, .. } => {
+                let resp = client
+                    .get_object()
+                    .bucket(bucket)
+                    .key(key)
+                    .send()
+                    .await?;
+
+                let body = resp.body.collect().await?;
+
+                Ok(body.into_bytes().to_vec())
+            }
+            ObjectStore::Local { dir } => {
+                let path = std::path::Path::new(dir).join(bucket).join(key);
+                std::fs::read(path).map_err(|e| format!("Failed to read object: {}", e))?
             }
         }
     }
