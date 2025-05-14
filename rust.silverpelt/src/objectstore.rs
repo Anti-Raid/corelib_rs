@@ -307,7 +307,7 @@ impl ObjectStore {
             }
             ObjectStore::Local { dir } => {
                 let path = std::path::Path::new(dir).join(bucket).join(key);
-                std::fs::read(path).map_err(|e| format!("Failed to read object: {}", e))?
+                Ok(std::fs::read(path).map_err(|e| format!("Failed to read object: {}", e))?)
             }
         }
     }
