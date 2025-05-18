@@ -24,6 +24,8 @@ pub struct LuaKVConstraints {
     pub max_key_length: usize,
     /// Maximum length of a value (in bytes)
     pub max_value_bytes: usize,
+    /// Maximum length of a object storage data
+    pub max_object_storage_bytes: usize,
 }
 
 impl Default for LuaKVConstraints {
@@ -33,6 +35,8 @@ impl Default for LuaKVConstraints {
             max_key_length: 512,
             // 256kb max per value
             max_value_bytes: 256 * 1024,
+            // 512kb max per value
+            max_object_storage_bytes: 512 * 1024
         }
     }
 }
