@@ -37,7 +37,7 @@ impl Default for LuaKVConstraints {
             max_key_length: 512,
             // 256kb max per value
             max_value_bytes: 256 * 1024,
-            max_object_storage_path_length: 2048
+            max_object_storage_path_length: 2048,
             // 512kb max per value
             max_object_storage_bytes: 512 * 1024
         }
