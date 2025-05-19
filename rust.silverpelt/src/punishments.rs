@@ -4,7 +4,7 @@ use antiraid_types::punishments::{
 use std::str::FromStr;
 
 use crate::{
-    ar_event::{AntiraidEventOperations, DispatchEventData},
+    ar_event::DispatchEventData,
     pginterval::pg_interval_to_secs,
 };
 use sqlx::{postgres::types::PgInterval, Row};

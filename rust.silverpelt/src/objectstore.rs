@@ -7,6 +7,8 @@ const MULTIPART_MIN_SIZE: usize = 50 * 1024 * 1024;
 pub enum ObjectStore {
     S3 {
         client: aws_sdk_s3::Client,
+        cdn_client: aws_sdk_s3::Client,
+        cdn_endpoint: String,
         created_buckets: DashMap<String, ()>,
     },
     Local {
@@ -18,6 +20,7 @@ impl ObjectStore {
     pub fn new_s3(
         app_name: String,
         endpoint: String,
+        cdn_endpoint: String,
         key: String,
         secret: String,
     ) -> Result<Self, crate::Error> {
@@ -30,7 +33,7 @@ impl ObjectStore {
                     None,
                     "s3",
                 ))
-                .app_name(aws_sdk_s3::config::AppName::new(app_name)?)
+                .app_name(aws_sdk_s3::config::AppName::new(app_name.clone())?)
                 .region(aws_sdk_s3::config::Region::new("us-east-1"))
                 .endpoint_url(endpoint.clone())
                 .force_path_style(true)
@@ -38,8 +41,46 @@ impl ObjectStore {
                 .build(),
         );
 
+        let cdn_client = if cdn_endpoint.starts_with("$DOCKER:") {
+            aws_sdk_s3::Client::from_conf(
+                aws_sdk_s3::Config::builder()
+                    .credentials_provider(aws_sdk_s3::config::Credentials::new(
+                        key.clone(),
+                        secret.clone(),
+                        None,
+                        None,
+                        "s3",
+                    ))
+                    .app_name(aws_sdk_s3::config::AppName::new(app_name)?)
+                    .region(aws_sdk_s3::config::Region::new("us-east-1"))
+                    .endpoint_url(endpoint.clone())
+                    .force_path_style(true)
+                    .behavior_version_latest()
+                    .build(),
+            )
+        } else {
+            aws_sdk_s3::Client::from_conf(
+                aws_sdk_s3::Config::builder()
+                    .credentials_provider(aws_sdk_s3::config::Credentials::new(
+                        key.clone(),
+                        secret.clone(),
+                        None,
+                        None,
+                        "s3",
+                    ))
+                    .app_name(aws_sdk_s3::config::AppName::new(app_name)?)
+                    .region(aws_sdk_s3::config::Region::new("us-east-1"))
+                    .endpoint_url(cdn_endpoint.clone())
+                    .force_path_style(true)
+                    .behavior_version_latest()
+                    .build(),
+            )
+        };
+
         Ok(ObjectStore::S3 {
             client,
+            cdn_client,
+            cdn_endpoint,
             created_buckets: DashMap::new(),
         })
     }
@@ -63,6 +104,7 @@ impl ObjectStore {
             ObjectStore::S3 {
                 client,
                 created_buckets,
+                ..
             } => {
                 client.create_bucket().bucket(name).send().await?;
                 created_buckets.insert(name.to_string(), ());
@@ -84,6 +126,7 @@ impl ObjectStore {
             ObjectStore::S3 {
                 client,
                 created_buckets,
+                ..
             } => {
                 if created_buckets.contains_key(name) {
                     return Ok(());
@@ -156,8 +199,8 @@ impl ObjectStore {
         duration: std::time::Duration,
     ) -> Result<String, crate::Error> {
         match self {
-            ObjectStore::S3 { client, .. } => {
-                let url = client
+            ObjectStore::S3 { cdn_client, cdn_endpoint, .. } => {
+                let url = cdn_client
                     .get_object()
                     .bucket(bucket)
                     .key(key)
@@ -165,8 +208,25 @@ impl ObjectStore {
                         duration,
                     )?)
                     .await?;
+                    
+                let url = url.uri();
 
-                Ok(url.uri().to_string())
+                /*
+                    if strings.HasPrefix(o.c.CdnEndpoint, "$DOCKER:") {
+                        p.Scheme = "http"
+                        p.Host = strings.TrimPrefix(o.c.CdnEndpoint, "$DOCKER:")
+                    }
+                */
+                let url = if cdn_endpoint.starts_with("$DOCKER:") {
+                    let mut parsed_url = reqwest::Url::parse(url)?;
+                    parsed_url.set_host(Some(cdn_endpoint.trim_start_matches("$DOCKER:")))?;
+                    parsed_url.set_scheme("http").map_err(|_| "Failed to set new scheme")?;
+                    parsed_url.to_string()
+                } else {
+                    url.to_string()
+                };
+
+                Ok(url)
             }
             ObjectStore::Local { dir } => Ok(format!("file://{}/{}/{}", dir, bucket, key)),
         }
