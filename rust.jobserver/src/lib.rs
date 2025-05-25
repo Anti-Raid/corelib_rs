@@ -6,7 +6,6 @@ use indexmap::IndexMap;
 use silverpelt::objectstore::{guild_bucket, ObjectStore};
 use sqlx::postgres::types::PgInterval;
 use sqlx::PgPool;
-use std::str::FromStr;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -39,7 +38,6 @@ pub struct Statuses {
     #[serde(flatten)]
     pub extra_info: IndexMap<String, serde_json::Value>,
 }
-
 pub struct Job {
     pub id: Uuid,
     pub name: String,
@@ -50,41 +48,13 @@ pub struct Job {
     pub expiry: Option<chrono::Duration>,
     pub state: String,
     pub resumable: bool,
-    pub created_at: chrono::NaiveDateTime,
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Clone)]
-pub struct Owner {
-    pub id: String,
-    pub target_type: String,
-}
-
-impl FromStr for Owner {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut split = s.splitn(2, '/');
-        let target_type = split.next().ok_or("Invalid owner.target_type")?;
-        let id = split.next().ok_or("Invalid owner.id")?;
-
-        Ok(Self {
-            id: id.to_string(),
-            target_type: target_type.to_string(),
-        })
-    }
+    pub created_at: chrono::DateTime<Utc>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Output {
     pub filename: String,
     pub perguild: Option<bool>, // Temp flag for migrations
-}
-
-/// JobCreateResponse is the response upon creation of a job
-#[derive(serde::Deserialize, serde::Serialize, Clone)]
-pub struct JobCreateResponse {
-    /// The ID of the newly created task
-    pub id: String,
 }
 
 /// Internal representation of a job in postgres
@@ -98,7 +68,7 @@ struct JobRow {
     guild_id: String,
     expiry: Option<PgInterval>,
     state: String,
-    created_at: chrono::NaiveDateTime,
+    created_at: chrono::DateTime<Utc>,
     resumable: bool,
 }
 
