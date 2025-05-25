@@ -8,6 +8,7 @@ use sqlx::postgres::types::PgInterval;
 use sqlx::PgPool;
 use std::time::Duration;
 use uuid::Uuid;
+use chrono::Utc;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>; // This is constant and should be copy pasted
 
