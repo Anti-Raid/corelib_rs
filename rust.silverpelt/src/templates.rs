@@ -18,8 +18,6 @@ pub fn create_shop_template(template: &str, version: &str) -> String {
 
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct LuaKVConstraints {
-    /// Maximum number of keys allowed in the KV store
-    pub max_keys: usize,
     /// Maximum length of a key
     pub max_key_length: usize,
     /// Maximum length of a value (in bytes)
@@ -33,7 +31,6 @@ pub struct LuaKVConstraints {
 impl Default for LuaKVConstraints {
     fn default() -> Self {
         LuaKVConstraints {
-            max_keys: 10000,
             max_key_length: 512,
             // 256kb max per value
             max_value_bytes: 256 * 1024,
