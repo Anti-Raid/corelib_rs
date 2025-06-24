@@ -2,13 +2,12 @@ pub mod embed;
 pub mod poll;
 pub mod spawn;
 
+use chrono::Utc;
 use indexmap::IndexMap;
 use silverpelt::objectstore::{guild_bucket, ObjectStore};
 use sqlx::postgres::types::PgInterval;
 use sqlx::PgPool;
-use std::time::Duration;
 use uuid::Uuid;
-use chrono::Utc;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>; // This is constant and should be copy pasted
 
@@ -124,7 +123,6 @@ impl Job {
     }
 
     /// Fetches all jobs of a guild given guild id
-    #[allow(dead_code)] // Will be used in the near future
     pub async fn from_guild(
         guild_id: serenity::all::GuildId,
         pool: &sqlx::PgPool,
@@ -180,20 +178,8 @@ impl Job {
             .map(|output| format!("{}/{}", path, output.filename))
     }
 
-    #[allow(dead_code)]
-    pub async fn get_url(&self, object_store: &ObjectStore) -> Result<String, Error> {
-        // Check if the job has an output
-        let Some(path) = &self.get_file_path() else {
-            return Err("Job has no output".into());
-        };
-
-        object_store
-            .get_url(&guild_bucket(self.guild_id), path, Duration::from_secs(600))
-            .await
-    }
-
     /// Deletes the job from the object storage
-    pub async fn delete_from_storage(&self, object_store: &ObjectStore) -> Result<(), Error> {
+    async fn delete_from_storage(&self, object_store: &ObjectStore) -> Result<(), Error> {
         // Check if the job has an output
         let path = self.get_path();
 
@@ -212,7 +198,7 @@ impl Job {
     }
 
     /// Delete the job from the database, this also consumes the job dropping it from memory
-    pub async fn delete_from_db(self, pool: &PgPool) -> Result<(), Error> {
+    async fn delete_from_db(self, pool: &PgPool) -> Result<(), Error> {
         sqlx::query("DELETE FROM jobs WHERE id = $1")
             .bind(self.id)
             .execute(pool)
@@ -221,7 +207,8 @@ impl Job {
         Ok(())
     }
 
-    /// Deletes the job entirely, this includes deleting it from the object storage and the database
+    /// Deletes the job entirely, this includes deleting it from the object storage and the
+    ///
     /// This also consumes the job dropping it from memory
     #[allow(dead_code)] // Will be used in the near future
     pub async fn delete(self, pool: &PgPool, object_store: &ObjectStore) -> Result<(), Error> {
