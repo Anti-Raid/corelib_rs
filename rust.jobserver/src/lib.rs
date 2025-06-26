@@ -24,6 +24,7 @@ pub struct Spawn {
     pub execute: bool,
     pub id: Option<String>, // If create is false, this is required
     pub user_id: String,
+    pub guild_id: String,
 }
 
 /// Rust internal/special type to better serialize/speed up embed creation
