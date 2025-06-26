@@ -23,7 +23,6 @@ pub struct Spawn {
     pub create: bool,
     pub execute: bool,
     pub id: Option<String>, // If create is false, this is required
-    pub user_id: String,
     pub guild_id: String,
 }
 
